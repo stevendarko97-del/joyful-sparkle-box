@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import logoMark from "@/assets/logo-mark.png";
 
 export function SiteNav() {
   const { isAuthed, isAdmin, isTeacher, signOut, user } = useAuth();
@@ -9,8 +10,8 @@ export function SiteNav() {
   return (
     <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
       <Link to="/" className="flex items-center gap-2">
-        <div className="size-8 rounded-full bg-brand" />
-        <span className="text-xl font-medium tracking-tight">Scribe</span>
+        <img src={logoMark} alt="Quick Tutor" width={32} height={32} className="size-8" />
+        <span className="text-xl font-medium tracking-tight">Quick Tutor</span>
       </Link>
       <div className="hidden gap-8 text-sm font-medium sm:flex">
         <Link to="/teachers" className="text-muted-foreground transition-colors hover:text-brand">Find a Teacher</Link>
@@ -38,7 +39,7 @@ export function SiteNav() {
               search={{ mode: "signup" }}
               className="h-[34px] rounded-full bg-brand px-5 text-sm font-medium leading-[34px] text-primary-foreground ring-1 ring-brand transition-transform hover:scale-[1.02]"
             >
-              Join Scribe
+              Join Quick Tutor
             </Link>
           </>
         )}
