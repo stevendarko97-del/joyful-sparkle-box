@@ -11,6 +11,20 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard/teacher")({ component: TeacherDashboard });
 
+type ExamType = "BECE" | "WASSCE" | "NOV_DEC" | "SHS_REMEDIAL" | "JHS_REMEDIAL";
+const EXAM_OPTIONS: { value: ExamType; label: string }[] = [
+  { value: "WASSCE", label: "WASSCE" },
+  { value: "BECE", label: "BECE" },
+  { value: "NOV_DEC", label: "NOV/DEC" },
+  { value: "SHS_REMEDIAL", label: "SHS Remedial" },
+  { value: "JHS_REMEDIAL", label: "JHS Remedial" },
+];
+const GH_REGIONS = [
+  "Greater Accra", "Ashanti", "Western", "Central", "Eastern", "Volta",
+  "Northern", "Upper East", "Upper West", "Bono", "Bono East", "Ahafo",
+  "Western North", "Oti", "Savannah", "North East", "Online",
+];
+
 function TeacherDashboard() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -19,6 +33,8 @@ function TeacherDashboard() {
   const [rate, setRate] = useState(40);
   const [years, setYears] = useState(0);
   const [primarySubject, setPrimarySubject] = useState<string>("");
+  const [location, setLocation] = useState<string>("");
+  const [examTypes, setExamTypes] = useState<Set<ExamType>>(new Set());
   const [subjects, setSubjects] = useState<{ id: string; name: string }[]>([]);
   const [topics, setTopics] = useState<{ id: string; name: string; subject_id: string }[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
@@ -40,6 +56,8 @@ function TeacherDashboard() {
         setRate(Math.round((data.hourly_rate_cents ?? 4000) / 100));
         setYears(data.years_experience ?? 0);
         setPrimarySubject(data.primary_subject_id ?? "");
+        setLocation((data as { location?: string }).location ?? "");
+        setExamTypes(new Set(((data as { exam_types?: ExamType[] }).exam_types ?? []) as ExamType[]));
       }
     });
     supabase.from("profiles").select("bio").eq("id", user.id).maybeSingle().then(({ data }) => setBio(data?.bio ?? ""));
@@ -66,7 +84,8 @@ function TeacherDashboard() {
     const { error: e1 } = await supabase.from("teacher_profiles").upsert({
       user_id: user.id, headline, hourly_rate_cents: rate * 100, years_experience: years,
       primary_subject_id: primarySubject || null, is_active: true,
-    });
+      location, exam_types: Array.from(examTypes),
+    } as never);
     const { error: e2 } = await supabase.from("profiles").update({ bio }).eq("id", user.id);
     await supabase.from("teacher_topics").delete().eq("teacher_id", user.id);
     if (selectedTopics.size > 0) {
@@ -90,7 +109,7 @@ function TeacherDashboard() {
           <h2 className="font-serif text-2xl">Your profile</h2>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div><Label>Headline</Label><Input value={headline} maxLength={120} onChange={(e) => setHeadline(e.target.value)} className="mt-1" placeholder="AP Calculus specialist" /></div>
-            <div><Label>Hourly rate (USD)</Label><Input type="number" min={1} max={500} value={rate} onChange={(e) => setRate(+e.target.value)} className="mt-1" /></div>
+            <div><Label>Hourly rate (GH₵)</Label><Input type="number" min={1} max={500} value={rate} onChange={(e) => setRate(+e.target.value)} className="mt-1" /></div>
             <div><Label>Years experience</Label><Input type="number" min={0} max={60} value={years} onChange={(e) => setYears(+e.target.value)} className="mt-1" /></div>
             <div>
               <Label>Primary subject</Label>
@@ -98,6 +117,32 @@ function TeacherDashboard() {
                 <option value="">Select subject</option>
                 {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+            </div>
+            <div>
+              <Label>Location</Label>
+              <select value={location} onChange={(e) => setLocation(e.target.value)} className="mt-1 h-9 w-full rounded-md border border-border bg-card px-3 text-sm">
+                <option value="">Select region</option>
+                {GH_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <Label>Exams you prep students for</Label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {EXAM_OPTIONS.map((e) => {
+                  const on = examTypes.has(e.value);
+                  return (
+                    <button key={e.value} type="button"
+                      onClick={() => {
+                        const s = new Set(examTypes);
+                        s.has(e.value) ? s.delete(e.value) : s.add(e.value);
+                        setExamTypes(s);
+                      }}
+                      className={`rounded-full px-3 py-1 text-xs ${on ? "bg-brand text-primary-foreground" : "border border-border bg-card"}`}>
+                      {e.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="md:col-span-2"><Label>Bio</Label><Textarea value={bio} maxLength={1000} onChange={(e) => setBio(e.target.value)} className="mt-1" rows={4} /></div>
           </div>

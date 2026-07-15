@@ -159,9 +159,11 @@ export type Database = {
       teacher_profiles: {
         Row: {
           created_at: string
+          exam_types: Database["public"]["Enums"]["exam_type"][]
           headline: string
           hourly_rate_cents: number
           is_active: boolean
+          location: string
           primary_subject_id: string | null
           updated_at: string
           user_id: string
@@ -169,9 +171,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          exam_types?: Database["public"]["Enums"]["exam_type"][]
           headline?: string
           hourly_rate_cents?: number
           is_active?: boolean
+          location?: string
           primary_subject_id?: string | null
           updated_at?: string
           user_id: string
@@ -179,9 +183,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          exam_types?: Database["public"]["Enums"]["exam_type"][]
           headline?: string
           hourly_rate_cents?: number
           is_active?: boolean
+          location?: string
           primary_subject_id?: string | null
           updated_at?: string
           user_id?: string
@@ -339,6 +345,7 @@ export type Database = {
     Enums: {
       app_role: "student" | "teacher" | "admin"
       booking_status: "pending" | "confirmed" | "completed" | "cancelled"
+      exam_type: "BECE" | "WASSCE" | "NOV_DEC" | "SHS_REMEDIAL" | "JHS_REMEDIAL"
       transaction_status: "pending" | "succeeded" | "failed" | "refunded"
     }
     CompositeTypes: {
@@ -469,6 +476,7 @@ export const Constants = {
     Enums: {
       app_role: ["student", "teacher", "admin"],
       booking_status: ["pending", "confirmed", "completed", "cancelled"],
+      exam_type: ["BECE", "WASSCE", "NOV_DEC", "SHS_REMEDIAL", "JHS_REMEDIAL"],
       transaction_status: ["pending", "succeeded", "failed", "refunded"],
     },
   },
