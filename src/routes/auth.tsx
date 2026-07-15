@@ -62,7 +62,7 @@ function AuthPage() {
     <div className="min-h-screen bg-surface">
       <SiteNav />
       <div className="mx-auto max-w-md px-6 py-16">
-        <h1 className="font-serif text-4xl leading-tight">{mode === "signup" ? "Join Scribe" : "Welcome back"}</h1>
+        <h1 className="font-serif text-4xl leading-tight">{mode === "signup" ? "Join Quick Tutor" : "Welcome back"}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {mode === "signup" ? "Create your account in seconds." : "Sign in to continue."}
         </p>
@@ -99,7 +99,7 @@ function AuthPage() {
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          {mode === "signup" ? "Already have an account? " : "New to Scribe? "}
+          {mode === "signup" ? "Already have an account? " : "New to Quick Tutor? "}
           <button onClick={() => setMode(mode === "signup" ? "login" : "signup")} className="font-medium text-brand hover:underline">
             {mode === "signup" ? "Sign in" : "Create account"}
           </button>
