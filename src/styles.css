@@ -30,6 +30,7 @@
   --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
   --color-brand: var(--brand);
   --color-brand-soft: var(--brand-soft);
+  --color-accent-gold: var(--accent-gold);
   --color-ink: var(--ink);
   --color-surface: var(--surface);
   --color-background: var(--background);
@@ -72,6 +73,7 @@
   /* Academic modernism palette */
   --brand: oklch(0.45 0.16 27);          /* #991b1b claret */
   --brand-soft: oklch(0.97 0.02 25);     /* #fef2f2 */
+  --accent-gold: oklch(0.78 0.13 82);    /* #c9a227 warm gold */
   --ink: oklch(0.18 0.01 286);           /* #18181b */
   --surface: oklch(0.985 0.002 286);     /* #fafafa */
   --background: oklch(0.985 0.002 286);

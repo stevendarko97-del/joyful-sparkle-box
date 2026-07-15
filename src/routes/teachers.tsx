@@ -5,7 +5,7 @@ import { SiteNav, SiteFooter } from "@/components/site-nav";
 
 export const Route = createFileRoute("/teachers")({
   component: TeachersPage,
-  head: () => ({ meta: [{ title: "Find a Teacher — Scribe" }] }),
+  head: () => ({ meta: [{ title: "Find a Tutor — Quick Tutor" }] }),
 });
 
 type Teacher = {

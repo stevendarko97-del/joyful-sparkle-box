@@ -7,8 +7,10 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Scribe — 1-on-1 video lessons for high schoolers" },
-      { name: "description", content: "Book certified high school teachers for live video lessons. AP, IB, SAT prep and more." },
+      { title: "Quick Tutor — WAEC, BECE & NOV/DEC prep with expert Ghanaian tutors" },
+      { name: "description", content: "Book verified Ghanaian tutors for BECE, WASSCE and NOV/DEC private candidates. One-on-one live lessons in every WAEC subject." },
+      { property: "og:title", content: "Quick Tutor — WAEC, BECE & NOV/DEC prep" },
+      { property: "og:description", content: "One-on-one lessons with verified Ghanaian tutors for BECE, WASSCE and NOV/DEC candidates." },
     ],
   }),
 });
