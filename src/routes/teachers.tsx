@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteNav, SiteFooter } from "@/components/site-nav";
+import { BookingDialog } from "@/components/booking-dialog";
 
 export const Route = createFileRoute("/teachers")({
   component: TeachersPage,
@@ -45,6 +46,7 @@ function TeachersPage() {
   const [sortBy, setSortBy] = useState<"price_asc" | "price_desc" | "name_asc">("price_asc");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 9;
+  const [bookingTeacher, setBookingTeacher] = useState<Teacher | null>(null);
 
   useEffect(() => {
     supabase.from("subjects").select("id, name").order("name").then(({ data }) => setSubjects(data ?? []));
@@ -208,7 +210,15 @@ function TeachersPage() {
                   )}
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-sm font-semibold">GH₵{(t.hourly_rate_cents / 100).toFixed(0)}<span className="font-normal text-muted-foreground">/hr</span></span>
-                    <span className="h-8 rounded-full bg-secondary px-4 text-xs font-medium leading-8 transition-colors group-hover:bg-brand group-hover:text-primary-foreground">View Profile</span>
+                    <div className="flex items-center gap-2">
+                      <span className="h-8 rounded-full bg-secondary px-3 text-xs font-medium leading-8 transition-colors group-hover:bg-secondary/70">View</span>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBookingTeacher(t); }}
+                        className="h-8 rounded-full bg-ink px-4 text-xs font-medium text-primary-foreground transition-colors hover:bg-brand"
+                      >
+                        Book
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -245,6 +255,15 @@ function TeachersPage() {
         )}
       </section>
       <SiteFooter />
+      <BookingDialog
+        open={!!bookingTeacher}
+        onClose={() => setBookingTeacher(null)}
+        teacher={bookingTeacher ? {
+          user_id: bookingTeacher.user_id,
+          full_name: bookingTeacher.profiles?.full_name || "Tutor",
+          hourly_rate_cents: bookingTeacher.hourly_rate_cents,
+        } : null}
+      />
     </div>
   );
 }
