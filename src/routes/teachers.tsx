@@ -31,8 +31,11 @@ type Teacher = {
   hourly_rate_cents: number;
   location: string;
   exam_types: ExamType[];
+  verification_status: "unverified" | "pending" | "verified" | "rejected";
   profiles: { full_name: string; avatar_url: string | null } | null;
   subjects: { name: string } | null;
+  avg_stars?: number;
+  review_count?: number;
 };
 
 function TeachersPage() {
@@ -54,13 +57,27 @@ function TeachersPage() {
 
   useEffect(() => {
     let q = supabase.from("teacher_profiles").select(
-      "user_id, headline, hourly_rate_cents, location, exam_types, profiles:profiles!teacher_profiles_user_id_fkey(full_name, avatar_url), subjects:subjects!teacher_profiles_primary_subject_id_fkey(name)"
+      "user_id, headline, hourly_rate_cents, location, exam_types, verification_status, profiles:profiles!teacher_profiles_user_id_fkey(full_name, avatar_url), subjects:subjects!teacher_profiles_primary_subject_id_fkey(name)"
     ).eq("is_active", true);
     if (activeSubject) q = q.eq("primary_subject_id", activeSubject);
     if (activeExam) q = q.contains("exam_types", [activeExam]);
     if (activeLocation) q = q.eq("location", activeLocation);
     q.lte("hourly_rate_cents", maxPrice * 100)
-      .then(({ data }) => setTeachers((data ?? []) as unknown as Teacher[]));
+      .then(async ({ data }) => {
+        const rows = (data ?? []) as unknown as Teacher[];
+        if (rows.length === 0) { setTeachers([]); return; }
+        const ids = rows.map((r) => r.user_id);
+        const { data: rt } = await supabase.from("ratings").select("teacher_id, stars").in("teacher_id", ids);
+        const agg = new Map<string, { sum: number; n: number }>();
+        (rt ?? []).forEach((r) => {
+          const a = agg.get(r.teacher_id) ?? { sum: 0, n: 0 };
+          a.sum += r.stars; a.n += 1; agg.set(r.teacher_id, a);
+        });
+        setTeachers(rows.map((r) => {
+          const a = agg.get(r.user_id);
+          return { ...r, avg_stars: a ? a.sum / a.n : undefined, review_count: a?.n ?? 0 };
+        }));
+      });
   }, [activeSubject, activeExam, activeLocation, maxPrice]);
 
   const filtered = useMemo(
@@ -195,10 +212,25 @@ function TeachersPage() {
                   {t.profiles?.avatar_url && <img src={t.profiles.avatar_url} alt="" className="size-full rounded-xl object-cover" />}
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-base font-medium">{t.profiles?.full_name || "Tutor"}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-medium">{t.profiles?.full_name || "Tutor"}</h3>
+                    {t.verification_status === "verified" && (
+                      <span title="Verified tutor" className="inline-flex h-5 items-center gap-1 rounded-full bg-brand/10 px-2 text-[10px] font-semibold text-brand">
+                        <svg viewBox="0 0 24 24" className="size-3" fill="currentColor"><path d="M12 2l2.4 2.6 3.5-.5.5 3.5L21 10l-2.6 2.4.5 3.5-3.5.5L12 19l-2.4-2.6-3.5.5-.5-3.5L3 10l2.6-2.4-.5-3.5 3.5-.5L12 2z"/><path d="M10.5 13.2l-2-2 1-1 1 1 3-3 1 1z" fill="var(--surface)"/></svg>
+                        Verified
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {t.subjects?.name ?? "General"} • {t.location || "Location TBD"}
                   </p>
+                  {t.review_count && t.review_count > 0 ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <span className="text-accent-gold">★</span> {t.avg_stars?.toFixed(1)} <span className="text-muted-foreground/70">({t.review_count} review{t.review_count === 1 ? "" : "s"})</span>
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground/60">No reviews yet</p>
+                  )}
                   {t.exam_types?.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {t.exam_types.map((e) => (
