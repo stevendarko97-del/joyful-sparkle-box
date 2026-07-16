@@ -14,8 +14,6 @@ type Props = {
   } | null;
 };
 
-const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
-
 function fmtDay(d: Date) {
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
@@ -29,6 +27,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
   const [selectedDay, setSelectedDay] = useState(0);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [taken, setTaken] = useState<Set<string>>(new Set());
+  const [availByDow, setAvailByDow] = useState<Map<number, number[]>>(new Map());
   const [busy, setBusy] = useState(false);
 
   const days = useMemo(() => {
@@ -59,12 +58,27 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
         });
         setTaken(s);
       });
+
+    supabase.from("teacher_availability")
+      .select("day_of_week, start_hour, end_hour")
+      .eq("teacher_id", teacher.user_id)
+      .then(({ data }) => {
+        const m = new Map<number, number[]>();
+        (data ?? []).forEach((r) => {
+          const hrs = m.get(r.day_of_week) ?? [];
+          for (let h = r.start_hour; h < r.end_hour; h++) if (!hrs.includes(h)) hrs.push(h);
+          hrs.sort((a, b) => a - b);
+          m.set(r.day_of_week, hrs);
+        });
+        setAvailByDow(m);
+      });
   }, [open, teacher]);
 
   if (!open || !teacher) return null;
 
   const now = new Date();
   const dayDate = days[selectedDay];
+  const dayHours = availByDow.get(dayDate.getDay()) ?? [];
 
   const isSlotDisabled = (hour: number) => {
     if (taken.has(`${ymd(dayDate)}-${hour}`)) return true;
@@ -128,8 +142,13 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
           </div>
 
           <label className="mt-5 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Time slot</label>
+          {dayHours.length === 0 ? (
+            <p className="mt-2 rounded-lg bg-secondary/50 p-4 text-center text-xs text-muted-foreground">
+              This tutor hasn't set availability for this day.
+            </p>
+          ) : (
           <div className="mt-2 grid grid-cols-4 gap-2">
-            {HOURS.map((h) => {
+            {dayHours.map((h) => {
               const disabled = isSlotDisabled(h);
               const selected = selectedHour === h;
               const label = `${h > 12 ? h - 12 : h}:00${h >= 12 ? "pm" : "am"}`;
@@ -151,6 +170,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
               );
             })}
           </div>
+          )}
           <p className="mt-3 text-[11px] text-muted-foreground">Greyed-out slots are already booked.</p>
         </div>
 
