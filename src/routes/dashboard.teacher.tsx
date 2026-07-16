@@ -8,9 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import type { Database } from "@/integrations/supabase/types";
-
-type VerificationStatus = Database["public"]["Enums"]["verification_status"];
+type VerificationStatus = "unverified" | "pending" | "verified" | "rejected";
 type Availability = { id?: string; day_of_week: number; start_hour: number; end_hour: number };
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
