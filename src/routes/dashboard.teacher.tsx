@@ -8,6 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import type { Database } from "@/integrations/supabase/types";
+
+type VerificationStatus = Database["public"]["Enums"]["verification_status"];
+type Availability = { id?: string; day_of_week: number; start_hour: number; end_hour: number };
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export const Route = createFileRoute("/dashboard/teacher")({ component: TeacherDashboard });
 
@@ -40,6 +45,9 @@ function TeacherDashboard() {
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
   const [specialties, setSpecialties] = useState<Set<string>>(new Set());
   const [bookings, setBookings] = useState<{ id: string; scheduled_at: string; status: string; profiles: { full_name: string } | null }[]>([]);
+  const [availability, setAvailability] = useState<Availability[]>([]);
+  const [verification, setVerification] = useState<{ status: VerificationStatus; id_document_url: string | null; qualification_document_url: string | null; notes: string | null }>({ status: "unverified", id_document_url: null, qualification_document_url: null, notes: null });
+  const [uploading, setUploading] = useState<"id" | "qual" | null>(null);
 
   useEffect(() => { if (!loading && !user) navigate({ to: "/auth" }); }, [user, loading, navigate]);
 
@@ -58,6 +66,13 @@ function TeacherDashboard() {
         setPrimarySubject(data.primary_subject_id ?? "");
         setLocation((data as { location?: string }).location ?? "");
         setExamTypes(new Set(((data as { exam_types?: ExamType[] }).exam_types ?? []) as ExamType[]));
+        const d = data as unknown as { verification_status?: VerificationStatus; id_document_url?: string | null; qualification_document_url?: string | null; verification_notes?: string | null };
+        setVerification({
+          status: d.verification_status ?? "unverified",
+          id_document_url: d.id_document_url ?? null,
+          qualification_document_url: d.qualification_document_url ?? null,
+          notes: d.verification_notes ?? null,
+        });
       }
     });
     supabase.from("profiles").select("bio").eq("id", user.id).maybeSingle().then(({ data }) => setBio(data?.bio ?? ""));
@@ -69,6 +84,8 @@ function TeacherDashboard() {
     supabase.from("bookings").select("id, scheduled_at, status, profiles:profiles!bookings_student_id_fkey(full_name)")
       .eq("teacher_id", user.id).order("scheduled_at", { ascending: false })
       .then(({ data }) => setBookings((data ?? []) as unknown as typeof bookings));
+    supabase.from("teacher_availability").select("id, day_of_week, start_hour, end_hour").eq("teacher_id", user.id)
+      .order("day_of_week").then(({ data }) => setAvailability(data ?? []));
   }, [user]);
 
   const toggleTopic = (id: string) => {
@@ -98,6 +115,55 @@ function TeacherDashboard() {
   };
 
   const filteredTopics = primarySubject ? topics.filter((t) => t.subject_id === primarySubject) : topics;
+
+  const addAvailability = () => setAvailability([...availability, { day_of_week: 1, start_hour: 9, end_hour: 17 }]);
+  const updateAvailability = (i: number, patch: Partial<Availability>) => {
+    const next = [...availability]; next[i] = { ...next[i], ...patch }; setAvailability(next);
+  };
+  const removeAvailability = (i: number) => setAvailability(availability.filter((_, x) => x !== i));
+  const saveAvailability = async () => {
+    if (!user) return;
+    await supabase.from("teacher_availability").delete().eq("teacher_id", user.id);
+    if (availability.length > 0) {
+      const { error } = await supabase.from("teacher_availability").insert(
+        availability.map((a) => ({ teacher_id: user.id, day_of_week: a.day_of_week, start_hour: a.start_hour, end_hour: a.end_hour }))
+      );
+      if (error) { toast.error(error.message); return; }
+    }
+    toast.success("Availability saved");
+  };
+
+  const uploadDoc = async (kind: "id" | "qual", file: File) => {
+    if (!user) return;
+    setUploading(kind);
+    const path = `${user.id}/${kind}-${Date.now()}-${file.name}`;
+    const { error: upErr } = await supabase.storage.from("verification-docs").upload(path, file, { upsert: true });
+    if (upErr) { setUploading(null); toast.error(upErr.message); return; }
+    const field = kind === "id" ? "id_document_url" : "qualification_document_url";
+    const { error: dbErr } = await supabase.from("teacher_profiles").update({ [field]: path } as never).eq("user_id", user.id);
+    setUploading(null);
+    if (dbErr) { toast.error(dbErr.message); return; }
+    setVerification((v) => ({ ...v, [field]: path } as typeof v));
+    toast.success("Uploaded");
+  };
+
+  const submitVerification = async () => {
+    if (!user) return;
+    if (!verification.id_document_url || !verification.qualification_document_url) {
+      toast.error("Upload both documents first"); return;
+    }
+    const { error } = await supabase.from("teacher_profiles").update({ verification_status: "pending" } as never).eq("user_id", user.id);
+    if (error) { toast.error(error.message); return; }
+    setVerification((v) => ({ ...v, status: "pending" }));
+    toast.success("Submitted for review");
+  };
+
+  const statusBadge = {
+    unverified: { label: "Not submitted", cls: "bg-secondary text-muted-foreground" },
+    pending: { label: "Under review", cls: "bg-accent-gold/30 text-ink" },
+    verified: { label: "Verified ✓", cls: "bg-brand/10 text-brand" },
+    rejected: { label: "Rejected", cls: "bg-destructive/10 text-destructive" },
+  }[verification.status];
 
   return (
     <div className="min-h-screen bg-surface">
