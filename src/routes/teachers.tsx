@@ -42,6 +42,9 @@ function TeachersPage() {
   const [activeLocation, setActiveLocation] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<number>(200);
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"price_asc" | "price_desc" | "name_asc">("price_asc");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 9;
 
   useEffect(() => {
     supabase.from("subjects").select("id, name").order("name").then(({ data }) => setSubjects(data ?? []));
@@ -67,6 +70,22 @@ function TeachersPage() {
     [teachers, search]
   );
 
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      if (sortBy === "price_asc") return a.hourly_rate_cents - b.hourly_rate_cents;
+      if (sortBy === "price_desc") return b.hourly_rate_cents - a.hourly_rate_cents;
+      return (a.profiles?.full_name ?? "").localeCompare(b.profiles?.full_name ?? "");
+    });
+    return arr;
+  }, [filtered, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [activeSubject, activeExam, activeLocation, maxPrice, search, sortBy]);
+
   const clearAll = () => {
     setActiveSubject(null); setActiveExam(null); setActiveLocation(""); setMaxPrice(200); setSearch("");
   };
@@ -77,9 +96,23 @@ function TeachersPage() {
       <SiteNav />
       <section className="mx-auto max-w-7xl px-6 py-12">
         <h1 className="font-serif text-5xl leading-tight">Find your tutor</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {filtered.length} tutor{filtered.length === 1 ? "" : "s"} available
-        </p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {sorted.length} tutor{sorted.length === 1 ? "" : "s"} available
+          </p>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-muted-foreground">Sort by</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="h-9 rounded-lg border border-border bg-surface px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand"
+            >
+              <option value="price_asc">Price: low to high</option>
+              <option value="price_desc">Price: high to low</option>
+              <option value="name_asc">Name: A–Z</option>
+            </select>
+          </div>
+        </div>
 
         <div className="mt-8 rounded-2xl bg-card p-5 ring-1 ring-black/5">
           <div className="grid gap-4 md:grid-cols-4">
@@ -148,12 +181,12 @@ function TeachersPage() {
         </div>
 
         <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.length === 0 && (
+          {paged.length === 0 && (
             <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
               No tutors match those filters. Try widening your search.
             </p>
           )}
-          {filtered.map((t) => (
+          {paged.map((t) => (
             <Link to="/teacher/$id" params={{ id: t.user_id }} key={t.user_id} className="group block rounded-2xl bg-card p-5 ring-1 ring-black/5 transition-colors hover:ring-brand/20">
               <div className="flex items-start gap-4">
                 <div className="size-16 shrink-0 rounded-xl bg-secondary outline outline-1 -outline-offset-1 outline-black/5">
@@ -182,6 +215,34 @@ function TeachersPage() {
             </Link>
           ))}
         </div>
+
+        {totalPages > 1 && (
+          <div className="mt-10 flex items-center justify-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="h-9 rounded-full border border-border bg-surface px-4 text-xs font-medium disabled:opacity-40 hover:bg-secondary"
+            >
+              Previous
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+              <button
+                key={n}
+                onClick={() => setPage(n)}
+                className={`h-9 min-w-9 rounded-full px-3 text-xs font-medium transition-colors ${n === currentPage ? "bg-ink text-primary-foreground" : "border border-border bg-surface hover:bg-secondary"}`}
+              >
+                {n}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="h-9 rounded-full border border-border bg-surface px-4 text-xs font-medium disabled:opacity-40 hover:bg-secondary"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </section>
       <SiteFooter />
     </div>
