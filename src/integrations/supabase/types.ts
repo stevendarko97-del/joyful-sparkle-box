@@ -156,17 +156,49 @@ export type Database = {
         }
         Relationships: []
       }
+      teacher_availability: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          end_hour: number
+          id: string
+          start_hour: number
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          end_hour: number
+          id?: string
+          start_hour: number
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          end_hour?: number
+          id?: string
+          start_hour?: number
+          teacher_id?: string
+        }
+        Relationships: []
+      }
       teacher_profiles: {
         Row: {
           created_at: string
           exam_types: Database["public"]["Enums"]["exam_type"][]
           headline: string
           hourly_rate_cents: number
+          id_document_url: string | null
           is_active: boolean
           location: string
           primary_subject_id: string | null
+          qualification_document_url: string | null
           updated_at: string
           user_id: string
+          verification_notes: string | null
+          verification_status: Database["public"]["Enums"]["verification_status"]
+          verified_at: string | null
           years_experience: number
         }
         Insert: {
@@ -174,11 +206,16 @@ export type Database = {
           exam_types?: Database["public"]["Enums"]["exam_type"][]
           headline?: string
           hourly_rate_cents?: number
+          id_document_url?: string | null
           is_active?: boolean
           location?: string
           primary_subject_id?: string | null
+          qualification_document_url?: string | null
           updated_at?: string
           user_id: string
+          verification_notes?: string | null
+          verification_status?: Database["public"]["Enums"]["verification_status"]
+          verified_at?: string | null
           years_experience?: number
         }
         Update: {
@@ -186,11 +223,16 @@ export type Database = {
           exam_types?: Database["public"]["Enums"]["exam_type"][]
           headline?: string
           hourly_rate_cents?: number
+          id_document_url?: string | null
           is_active?: boolean
           location?: string
           primary_subject_id?: string | null
+          qualification_document_url?: string | null
           updated_at?: string
           user_id?: string
+          verification_notes?: string | null
+          verification_status?: Database["public"]["Enums"]["verification_status"]
+          verified_at?: string | null
           years_experience?: number
         }
         Relationships: [
@@ -347,6 +389,7 @@ export type Database = {
       booking_status: "pending" | "confirmed" | "completed" | "cancelled"
       exam_type: "BECE" | "WASSCE" | "NOV_DEC" | "SHS_REMEDIAL" | "JHS_REMEDIAL"
       transaction_status: "pending" | "succeeded" | "failed" | "refunded"
+      verification_status: "unverified" | "pending" | "verified" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -478,6 +521,7 @@ export const Constants = {
       booking_status: ["pending", "confirmed", "completed", "cancelled"],
       exam_type: ["BECE", "WASSCE", "NOV_DEC", "SHS_REMEDIAL", "JHS_REMEDIAL"],
       transaction_status: ["pending", "succeeded", "failed", "refunded"],
+      verification_status: ["unverified", "pending", "verified", "rejected"],
     },
   },
 } as const
