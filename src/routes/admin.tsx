@@ -101,6 +101,17 @@ function AdminPage() {
 
         <section className="mt-12">
           <h2 className="font-serif text-2xl">Transactions</h2>
+          <div className="mt-4 overflow-hidden rounded-2xl ring-1 ring-black/5">
+            <table className="w-full text-sm">
+              <thead className="bg-secondary text-left text-xs uppercase tracking-wider text-muted-foreground"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th></tr></thead>
+              <tbody className="bg-card">
+                {transactions.map((t) => (
+                  <tr key={t.id} className="border-t border-border"><td className="px-4 py-3">{new Date(t.created_at).toLocaleString()}</td><td className="px-4 py-3">{t.currency.toUpperCase()} ${(t.amount_cents / 100).toFixed(2)}</td><td className="px-4 py-3">{t.status}</td></tr>
+                ))}
+                {transactions.length === 0 && <tr><td colSpan={3} className="px-4 py-12 text-center text-muted-foreground">No transactions yet (Stripe wiring next step)</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="mt-12">
@@ -118,20 +129,6 @@ function AdminPage() {
                 </div>
               </div>
             ))}
-          </div>
-        </section>
-
-        <section className="mt-12 hidden">
-          <div className="mt-4 overflow-hidden rounded-2xl ring-1 ring-black/5">
-            <table className="w-full text-sm">
-              <thead className="bg-secondary text-left text-xs uppercase tracking-wider text-muted-foreground"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Status</th></tr></thead>
-              <tbody className="bg-card">
-                {transactions.map((t) => (
-                  <tr key={t.id} className="border-t border-border"><td className="px-4 py-3">{new Date(t.created_at).toLocaleString()}</td><td className="px-4 py-3">{t.currency.toUpperCase()} ${(t.amount_cents / 100).toFixed(2)}</td><td className="px-4 py-3">{t.status}</td></tr>
-                ))}
-                {transactions.length === 0 && <tr><td colSpan={3} className="px-4 py-12 text-center text-muted-foreground">No transactions yet (Stripe wiring next step)</td></tr>}
-              </tbody>
-            </table>
           </div>
         </section>
       </div>
