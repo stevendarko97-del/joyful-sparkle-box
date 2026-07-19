@@ -82,12 +82,14 @@ function TeachersPage() {
   }, [activeSubject, activeExam, activeLocation, maxPrice]);
 
   const filtered = useMemo(
-    () => teachers.filter((t) =>
-      !search
+    () => teachers.filter((t) => {
+      const matchesSearch = !search
         || t.profiles?.full_name.toLowerCase().includes(search.toLowerCase())
-        || t.headline.toLowerCase().includes(search.toLowerCase())
-    ),
-    [teachers, search]
+        || t.headline.toLowerCase().includes(search.toLowerCase());
+      const matchesStars = minStars === 0 || (t.avg_stars ?? 0) >= minStars;
+      return matchesSearch && matchesStars;
+    }),
+    [teachers, search, minStars]
   );
 
   const sorted = useMemo(() => {
@@ -110,12 +112,12 @@ function TeachersPage() {
   const currentPage = Math.min(page, totalPages);
   const paged = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  useEffect(() => { setPage(1); }, [activeSubject, activeExam, activeLocation, maxPrice, search, sortBy]);
+  useEffect(() => { setPage(1); }, [activeSubject, activeExam, activeLocation, maxPrice, search, sortBy, minStars]);
 
   const clearAll = () => {
-    setActiveSubject(null); setActiveExam(null); setActiveLocation(""); setMaxPrice(200); setSearch("");
+    setActiveSubject(null); setActiveExam(null); setActiveLocation(""); setMaxPrice(200); setSearch(""); setMinStars(0);
   };
-  const hasFilters = activeSubject || activeExam || activeLocation || maxPrice < 200 || search;
+  const hasFilters = activeSubject || activeExam || activeLocation || maxPrice < 200 || search || minStars > 0;
 
   return (
     <div className="min-h-screen bg-surface">
