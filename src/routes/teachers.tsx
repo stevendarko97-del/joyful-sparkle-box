@@ -247,9 +247,15 @@ function TeachersPage() {
                     {t.subjects?.name ?? "General"} • {t.location || "Location TBD"}
                   </p>
                   {t.review_count && t.review_count > 0 ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      <span className="text-accent-gold">★</span> {t.avg_stars?.toFixed(1)} <span className="text-muted-foreground/70">({t.review_count} review{t.review_count === 1 ? "" : "s"})</span>
-                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        <span className="text-accent-gold">★</span> {t.avg_stars?.toFixed(1)} <span className="text-muted-foreground/70">({t.review_count} review{t.review_count === 1 ? "" : "s"})</span>
+                      </p>
+                      <span title="Every review comes from a completed, confirmed booking" className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">
+                        <svg viewBox="0 0 24 24" className="size-3" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                        Verified
+                      </span>
+                    </div>
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground/60">No reviews yet</p>
                   )}
