@@ -46,7 +46,8 @@ function TeachersPage() {
   const [activeLocation, setActiveLocation] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<number>(200);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"price_asc" | "price_desc" | "name_asc">("price_asc");
+  const [sortBy, setSortBy] = useState<"rating_desc" | "reviews_desc" | "price_asc" | "price_desc" | "name_asc">("rating_desc");
+  const [minStars, setMinStars] = useState<number>(0);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 9;
   const [bookingTeacher, setBookingTeacher] = useState<Teacher | null>(null);
@@ -92,6 +93,12 @@ function TeachersPage() {
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
+      if (sortBy === "rating_desc") {
+        return (b.avg_stars ?? 0) - (a.avg_stars ?? 0) || (b.review_count ?? 0) - (a.review_count ?? 0);
+      }
+      if (sortBy === "reviews_desc") {
+        return (b.review_count ?? 0) - (a.review_count ?? 0) || (b.avg_stars ?? 0) - (a.avg_stars ?? 0);
+      }
       if (sortBy === "price_asc") return a.hourly_rate_cents - b.hourly_rate_cents;
       if (sortBy === "price_desc") return b.hourly_rate_cents - a.hourly_rate_cents;
       return (a.profiles?.full_name ?? "").localeCompare(b.profiles?.full_name ?? "");
