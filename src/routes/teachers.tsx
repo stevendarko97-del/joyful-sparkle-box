@@ -135,6 +135,8 @@ function TeachersPage() {
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
               className="h-9 rounded-lg border border-border bg-surface px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand"
             >
+              <option value="rating_desc">Top rated</option>
+              <option value="reviews_desc">Most reviewed</option>
               <option value="price_asc">Price: low to high</option>
               <option value="price_desc">Price: high to low</option>
               <option value="name_asc">Name: A–Z</option>
@@ -191,6 +193,17 @@ function TeachersPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">Min rating:</span>
+            {[0, 3, 4, 4.5].map((r) => (
+              <button
+                key={r}
+                onClick={() => setMinStars(r)}
+                className={`h-8 rounded-full px-3 text-xs font-medium transition-colors ${minStars === r ? "bg-ink text-primary-foreground" : "border border-border bg-surface hover:bg-secondary"}`}
+              >
+                {r === 0 ? "Any" : <><span className="text-accent-gold">★</span> {r}+</>}
+              </button>
+            ))}
+            <span className="mx-2 h-4 w-px bg-border" />
             <span className="text-xs font-medium text-muted-foreground">Subject:</span>
             <button onClick={() => setActiveSubject(null)} className={`h-8 rounded-full px-3 text-xs font-medium transition-colors ${activeSubject === null ? "bg-ink text-primary-foreground" : "border border-border bg-surface hover:bg-secondary"}`}>
               All
