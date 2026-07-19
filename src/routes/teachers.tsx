@@ -46,7 +46,8 @@ function TeachersPage() {
   const [activeLocation, setActiveLocation] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<number>(200);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"price_asc" | "price_desc" | "name_asc">("price_asc");
+  const [sortBy, setSortBy] = useState<"rating_desc" | "reviews_desc" | "price_asc" | "price_desc" | "name_asc">("rating_desc");
+  const [minStars, setMinStars] = useState<number>(0);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 9;
   const [bookingTeacher, setBookingTeacher] = useState<Teacher | null>(null);
@@ -81,17 +82,25 @@ function TeachersPage() {
   }, [activeSubject, activeExam, activeLocation, maxPrice]);
 
   const filtered = useMemo(
-    () => teachers.filter((t) =>
-      !search
+    () => teachers.filter((t) => {
+      const matchesSearch = !search
         || t.profiles?.full_name.toLowerCase().includes(search.toLowerCase())
-        || t.headline.toLowerCase().includes(search.toLowerCase())
-    ),
-    [teachers, search]
+        || t.headline.toLowerCase().includes(search.toLowerCase());
+      const matchesStars = minStars === 0 || (t.avg_stars ?? 0) >= minStars;
+      return matchesSearch && matchesStars;
+    }),
+    [teachers, search, minStars]
   );
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
+      if (sortBy === "rating_desc") {
+        return (b.avg_stars ?? 0) - (a.avg_stars ?? 0) || (b.review_count ?? 0) - (a.review_count ?? 0);
+      }
+      if (sortBy === "reviews_desc") {
+        return (b.review_count ?? 0) - (a.review_count ?? 0) || (b.avg_stars ?? 0) - (a.avg_stars ?? 0);
+      }
       if (sortBy === "price_asc") return a.hourly_rate_cents - b.hourly_rate_cents;
       if (sortBy === "price_desc") return b.hourly_rate_cents - a.hourly_rate_cents;
       return (a.profiles?.full_name ?? "").localeCompare(b.profiles?.full_name ?? "");
@@ -103,12 +112,12 @@ function TeachersPage() {
   const currentPage = Math.min(page, totalPages);
   const paged = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  useEffect(() => { setPage(1); }, [activeSubject, activeExam, activeLocation, maxPrice, search, sortBy]);
+  useEffect(() => { setPage(1); }, [activeSubject, activeExam, activeLocation, maxPrice, search, sortBy, minStars]);
 
   const clearAll = () => {
-    setActiveSubject(null); setActiveExam(null); setActiveLocation(""); setMaxPrice(200); setSearch("");
+    setActiveSubject(null); setActiveExam(null); setActiveLocation(""); setMaxPrice(200); setSearch(""); setMinStars(0);
   };
-  const hasFilters = activeSubject || activeExam || activeLocation || maxPrice < 200 || search;
+  const hasFilters = activeSubject || activeExam || activeLocation || maxPrice < 200 || search || minStars > 0;
 
   return (
     <div className="min-h-screen bg-surface">
@@ -126,6 +135,8 @@ function TeachersPage() {
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
               className="h-9 rounded-lg border border-border bg-surface px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand"
             >
+              <option value="rating_desc">Top rated</option>
+              <option value="reviews_desc">Most reviewed</option>
               <option value="price_asc">Price: low to high</option>
               <option value="price_desc">Price: high to low</option>
               <option value="name_asc">Name: A–Z</option>
@@ -182,6 +193,17 @@ function TeachersPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">Min rating:</span>
+            {[0, 3, 4, 4.5].map((r) => (
+              <button
+                key={r}
+                onClick={() => setMinStars(r)}
+                className={`h-8 rounded-full px-3 text-xs font-medium transition-colors ${minStars === r ? "bg-ink text-primary-foreground" : "border border-border bg-surface hover:bg-secondary"}`}
+              >
+                {r === 0 ? "Any" : <><span className="text-accent-gold">★</span> {r}+</>}
+              </button>
+            ))}
+            <span className="mx-2 h-4 w-px bg-border" />
             <span className="text-xs font-medium text-muted-foreground">Subject:</span>
             <button onClick={() => setActiveSubject(null)} className={`h-8 rounded-full px-3 text-xs font-medium transition-colors ${activeSubject === null ? "bg-ink text-primary-foreground" : "border border-border bg-surface hover:bg-secondary"}`}>
               All
