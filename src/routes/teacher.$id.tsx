@@ -25,10 +25,11 @@ function TeacherDetail() {
   const navigate = useNavigate();
   const [t, setT] = useState<TeacherDetail | null>(null);
   const [topics, setTopics] = useState<{ id: string; name: string; is_specialty: boolean }[]>([]);
-  const [ratings, setRatings] = useState<{ stars: number; comment: string | null; bookings: { scheduled_at: string } | null }[]>([]);
+  const [ratings, setRatings] = useState<{ stars: number; comment: string | null; bookings: { scheduled_at: string; location: string | null } | null }[]>([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("17:30");
   const [topicId, setTopicId] = useState<string>("");
+  const [location, setLocation] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -39,8 +40,8 @@ function TeacherDetail() {
     supabase.from("teacher_topics").select("is_specialty, topics(id, name)").eq("teacher_id", id)
       .then(({ data }) => setTopics((data ?? []).map((r: { is_specialty: boolean; topics: { id: string; name: string } | null }) => ({ id: r.topics?.id ?? "", name: r.topics?.name ?? "", is_specialty: r.is_specialty })).filter((x) => x.id)));
 
-    supabase.from("ratings").select("stars, comment, bookings:bookings!ratings_booking_id_fkey(scheduled_at)").eq("teacher_id", id).order("created_at", { ascending: false }).limit(5)
-      .then(({ data }) => setRatings((data ?? []) as unknown as { stars: number; comment: string | null; bookings: { scheduled_at: string } | null }[]));
+    supabase.from("ratings").select("stars, comment, bookings:bookings!ratings_booking_id_fkey(scheduled_at, location)").eq("teacher_id", id).order("created_at", { ascending: false }).limit(5)
+      .then(({ data }) => setRatings((data ?? []) as unknown as { stars: number; comment: string | null; bookings: { scheduled_at: string; location: string | null } | null }[]));
   }, [id]);
 
   const avg = ratings.length ? (ratings.reduce((a, r) => a + r.stars, 0) / ratings.length).toFixed(1) : null;
@@ -59,6 +60,7 @@ function TeacherDetail() {
       duration_minutes: 60,
       price_cents: t.hourly_rate_cents,
       status: "pending",
+      location: location.trim() || null,
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -122,6 +124,7 @@ function TeacherDetail() {
                     {r.bookings?.scheduled_at && (
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         Session on {new Date(r.bookings.scheduled_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                        {r.bookings.location && ` · ${r.bookings.location}`}
                       </p>
                     )}
                   </div>
@@ -154,6 +157,10 @@ function TeacherDetail() {
                     </select>
                   </div>
                 )}
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Session location (optional)</label>
+                  <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Accra, Online, Kumasi" className="mt-2 w-full rounded-xl border border-border px-4 py-3 text-sm" />
+                </div>
               </div>
               <Button onClick={book} disabled={busy} className="mt-8 w-full rounded-xl bg-ink py-6 text-sm font-semibold text-primary-foreground hover:bg-ink/90">
                 {busy ? "Booking..." : "Confirm Booking"}

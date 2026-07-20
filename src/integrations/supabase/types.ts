@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           duration_minutes: number
           id: string
+          location: string | null
           notes: string | null
           price_cents: number
           room_id: string
@@ -33,6 +34,7 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           id?: string
+          location?: string | null
           notes?: string | null
           price_cents?: number
           room_id?: string
@@ -47,6 +49,7 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           id?: string
+          location?: string | null
           notes?: string | null
           price_cents?: number
           room_id?: string

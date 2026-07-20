@@ -26,6 +26,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
   const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState(0);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [location, setLocation] = useState("");
   const [taken, setTaken] = useState<Set<string>>(new Set());
   const [availByDow, setAvailByDow] = useState<Map<number, number[]>>(new Map());
   const [busy, setBusy] = useState(false);
@@ -41,7 +42,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
 
   useEffect(() => {
     if (!open || !teacher) return;
-    setSelectedDay(0); setSelectedHour(null);
+    setSelectedDay(0); setSelectedHour(null); setLocation("");
     const from = new Date(); from.setHours(0, 0, 0, 0);
     const to = new Date(from); to.setDate(from.getDate() + 7);
     supabase.from("bookings")
@@ -103,6 +104,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
       duration_minutes: 60,
       price_cents: teacher.hourly_rate_cents,
       status: "pending",
+      location: location.trim() || null,
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -172,6 +174,15 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
           </div>
           )}
           <p className="mt-3 text-[11px] text-muted-foreground">Greyed-out slots are already booked.</p>
+
+          <label className="mt-5 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Session location (optional)</label>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Accra, Online, Kumasi"
+            className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm"
+          />
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-border bg-secondary/30 p-4">
