@@ -157,6 +157,10 @@ function TeacherDetail() {
                     </select>
                   </div>
                 )}
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Session location (optional)</label>
+                  <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Accra, Online, Kumasi" className="mt-2 w-full rounded-xl border border-border px-4 py-3 text-sm" />
+                </div>
               </div>
               <Button onClick={book} disabled={busy} className="mt-8 w-full rounded-xl bg-ink py-6 text-sm font-semibold text-primary-foreground hover:bg-ink/90">
                 {busy ? "Booking..." : "Confirm Booking"}
