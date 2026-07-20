@@ -26,6 +26,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
   const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState(0);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [location, setLocation] = useState("");
   const [taken, setTaken] = useState<Set<string>>(new Set());
   const [availByDow, setAvailByDow] = useState<Map<number, number[]>>(new Map());
   const [busy, setBusy] = useState(false);
