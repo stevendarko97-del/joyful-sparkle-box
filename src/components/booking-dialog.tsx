@@ -42,7 +42,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
 
   useEffect(() => {
     if (!open || !teacher) return;
-    setSelectedDay(0); setSelectedHour(null);
+    setSelectedDay(0); setSelectedHour(null); setLocation("");
     const from = new Date(); from.setHours(0, 0, 0, 0);
     const to = new Date(from); to.setDate(from.getDate() + 7);
     supabase.from("bookings")
