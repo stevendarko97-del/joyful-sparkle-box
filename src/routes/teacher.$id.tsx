@@ -122,7 +122,6 @@ function TeacherDetail() {
                     {r.bookings?.scheduled_at && (
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         Session on {new Date(r.bookings.scheduled_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
-                        {t.profiles && "location" in (t as unknown as Record<string, unknown>) ? "" : ""}
                       </p>
                     )}
                   </div>
