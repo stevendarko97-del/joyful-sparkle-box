@@ -104,6 +104,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
       duration_minutes: 60,
       price_cents: teacher.hourly_rate_cents,
       status: "pending",
+      location: location.trim() || null,
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
