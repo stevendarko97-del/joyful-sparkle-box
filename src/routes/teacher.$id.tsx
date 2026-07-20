@@ -25,10 +25,11 @@ function TeacherDetail() {
   const navigate = useNavigate();
   const [t, setT] = useState<TeacherDetail | null>(null);
   const [topics, setTopics] = useState<{ id: string; name: string; is_specialty: boolean }[]>([]);
-  const [ratings, setRatings] = useState<{ stars: number; comment: string | null; bookings: { scheduled_at: string } | null }[]>([]);
+  const [ratings, setRatings] = useState<{ stars: number; comment: string | null; bookings: { scheduled_at: string; location: string | null } | null }[]>([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("17:30");
   const [topicId, setTopicId] = useState<string>("");
+  const [location, setLocation] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
