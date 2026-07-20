@@ -122,7 +122,8 @@ function TeacherDetail() {
                     </div>
                     {r.comment && <p className="mt-2 text-sm italic text-muted-foreground">"{r.comment}"</p>}
                     {r.bookings?.scheduled_at && (
-                      <p className="mt-2 text-[11px] text-muted-foreground">
+                      <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <svg viewBox="0 0 24 24" className="size-3 text-brand" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
                         Session on {new Date(r.bookings.scheduled_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
                         {r.bookings.location && ` · ${r.bookings.location}`}
                       </p>
