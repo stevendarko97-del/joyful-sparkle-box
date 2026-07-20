@@ -60,6 +60,7 @@ function TeacherDetail() {
       duration_minutes: 60,
       price_cents: t.hourly_rate_cents,
       status: "pending",
+      location: location.trim() || null,
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
