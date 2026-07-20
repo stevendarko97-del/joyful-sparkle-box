@@ -25,7 +25,7 @@ function TeacherDetail() {
   const navigate = useNavigate();
   const [t, setT] = useState<TeacherDetail | null>(null);
   const [topics, setTopics] = useState<{ id: string; name: string; is_specialty: boolean }[]>([]);
-  const [ratings, setRatings] = useState<{ stars: number; comment: string | null }[]>([]);
+  const [ratings, setRatings] = useState<{ stars: number; comment: string | null; bookings: { scheduled_at: string } | null }[]>([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("17:30");
   const [topicId, setTopicId] = useState<string>("");
@@ -39,8 +39,8 @@ function TeacherDetail() {
     supabase.from("teacher_topics").select("is_specialty, topics(id, name)").eq("teacher_id", id)
       .then(({ data }) => setTopics((data ?? []).map((r: { is_specialty: boolean; topics: { id: string; name: string } | null }) => ({ id: r.topics?.id ?? "", name: r.topics?.name ?? "", is_specialty: r.is_specialty })).filter((x) => x.id)));
 
-    supabase.from("ratings").select("stars, comment").eq("teacher_id", id).order("created_at", { ascending: false }).limit(5)
-      .then(({ data }) => setRatings(data ?? []));
+    supabase.from("ratings").select("stars, comment, bookings:bookings!ratings_booking_id_fkey(scheduled_at)").eq("teacher_id", id).order("created_at", { ascending: false }).limit(5)
+      .then(({ data }) => setRatings((data ?? []) as unknown as { stars: number; comment: string | null; bookings: { scheduled_at: string } | null }[]));
   }, [id]);
 
   const avg = ratings.length ? (ratings.reduce((a, r) => a + r.stars, 0) / ratings.length).toFixed(1) : null;
@@ -119,6 +119,11 @@ function TeacherDetail() {
                       </span>
                     </div>
                     {r.comment && <p className="mt-2 text-sm italic text-muted-foreground">"{r.comment}"</p>}
+                    {r.bookings?.scheduled_at && (
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Session on {new Date(r.bookings.scheduled_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
