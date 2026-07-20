@@ -40,8 +40,8 @@ function TeacherDetail() {
     supabase.from("teacher_topics").select("is_specialty, topics(id, name)").eq("teacher_id", id)
       .then(({ data }) => setTopics((data ?? []).map((r: { is_specialty: boolean; topics: { id: string; name: string } | null }) => ({ id: r.topics?.id ?? "", name: r.topics?.name ?? "", is_specialty: r.is_specialty })).filter((x) => x.id)));
 
-    supabase.from("ratings").select("stars, comment, bookings:bookings!ratings_booking_id_fkey(scheduled_at)").eq("teacher_id", id).order("created_at", { ascending: false }).limit(5)
-      .then(({ data }) => setRatings((data ?? []) as unknown as { stars: number; comment: string | null; bookings: { scheduled_at: string } | null }[]));
+    supabase.from("ratings").select("stars, comment, bookings:bookings!ratings_booking_id_fkey(scheduled_at, location)").eq("teacher_id", id).order("created_at", { ascending: false }).limit(5)
+      .then(({ data }) => setRatings((data ?? []) as unknown as { stars: number; comment: string | null; bookings: { scheduled_at: string; location: string | null } | null }[]));
   }, [id]);
 
   const avg = ratings.length ? (ratings.reduce((a, r) => a + r.stars, 0) / ratings.length).toFixed(1) : null;
