@@ -174,6 +174,15 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
           </div>
           )}
           <p className="mt-3 text-[11px] text-muted-foreground">Greyed-out slots are already booked.</p>
+
+          <label className="mt-5 block text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Session location (optional)</label>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Accra, Online, Kumasi"
+            className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm"
+          />
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-border bg-secondary/30 p-4">
