@@ -115,10 +115,12 @@ function TeacherDetail() {
                   <div key={i} className="rounded-2xl bg-secondary p-4">
                     <div className="flex items-center justify-between">
                       <div className="text-brand">{"★".repeat(r.stars)}<span className="text-muted-foreground">{"★".repeat(5 - r.stars)}</span></div>
-                      <span title="This review is from a completed, confirmed booking" className="inline-flex items-center gap-1 rounded-full bg-accent-gold/20 px-2 py-0.5 text-[10px] font-semibold text-ink">
-                        <svg viewBox="0 0 24 24" className="size-3" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-                        Verified session
-                      </span>
+                      {r.bookings?.scheduled_at && (
+                        <span title="This review is from a completed, confirmed booking" className="inline-flex items-center gap-1 rounded-full bg-accent-gold/20 px-2 py-0.5 text-[10px] font-semibold text-ink">
+                          <svg viewBox="0 0 24 24" className="size-3" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                          Verified session
+                        </span>
+                      )}
                     </div>
                     {r.comment && <p className="mt-2 text-sm italic text-muted-foreground">"{r.comment}"</p>}
                     {r.bookings?.scheduled_at && (
