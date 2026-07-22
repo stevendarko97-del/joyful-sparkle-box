@@ -5,6 +5,7 @@ import { SiteNav, SiteFooter } from "@/components/site-nav";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { validateLocation } from "@/lib/validate-location";
 
 export const Route = createFileRoute("/teacher/$id")({
   component: TeacherDetail,
@@ -50,6 +51,8 @@ function TeacherDetail() {
     if (!isAuthed) { navigate({ to: "/auth", search: { mode: "signup", role: "student" } }); return; }
     if (!date) { toast.error("Pick a date"); return; }
     if (!t || !user) return;
+    const loc = validateLocation(location);
+    if (!loc.ok) { toast.error(loc.error); return; }
     setBusy(true);
     const scheduledAt = new Date(`${date}T${time}:00`);
     const { error } = await supabase.from("bookings").insert({
@@ -60,7 +63,7 @@ function TeacherDetail() {
       duration_minutes: 60,
       price_cents: t.hourly_rate_cents,
       status: "pending",
-      location: location.trim() || null,
+      location: loc.value,
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -162,7 +165,7 @@ function TeacherDetail() {
                 )}
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Session location (optional)</label>
-                  <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Accra, Online, Kumasi" className="mt-2 w-full rounded-xl border border-border px-4 py-3 text-sm" />
+                  <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={100} placeholder="e.g. Accra, Online, Kumasi" className="mt-2 w-full rounded-xl border border-border px-4 py-3 text-sm" />
                 </div>
               </div>
               <Button onClick={book} disabled={busy} className="mt-8 w-full rounded-xl bg-ink py-6 text-sm font-semibold text-primary-foreground hover:bg-ink/90">
