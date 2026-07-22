@@ -183,6 +183,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
             type="text"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
+            maxLength={100}
             placeholder="e.g. Accra, Online, Kumasi"
             className="mt-2 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm"
           />
