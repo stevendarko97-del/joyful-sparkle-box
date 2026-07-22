@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
+import { validateLocation } from "@/lib/validate-location";
 
 type Props = {
   open: boolean;
@@ -94,6 +95,8 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
       return;
     }
     if (selectedHour === null) { toast.error("Pick a time slot"); return; }
+    const loc = validateLocation(location);
+    if (!loc.ok) { toast.error(loc.error); return; }
     setBusy(true);
     const scheduledAt = new Date(dayDate);
     scheduledAt.setHours(selectedHour, 0, 0, 0);
@@ -104,7 +107,7 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
       duration_minutes: 60,
       price_cents: teacher.hourly_rate_cents,
       status: "pending",
-      location: location.trim() || null,
+      location: loc.value,
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
