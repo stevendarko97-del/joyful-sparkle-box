@@ -1,0 +1,1 @@
+{"watch":["src"],"ext":"ts,json","ignore":["dist"],"exec":"npx ts-node src/server.ts"}

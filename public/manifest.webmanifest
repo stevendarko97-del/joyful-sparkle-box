@@ -1,0 +1,16 @@
+{
+  "name": "Quick Tutor — WAEC, BECE & NOV/DEC prep",
+  "short_name": "Quick Tutor",
+  "description": "Book verified Ghanaian tutors for BECE, WASSCE and NOV/DEC. One-on-one live lessons.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafafa",
+  "theme_color": "#991b1b",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

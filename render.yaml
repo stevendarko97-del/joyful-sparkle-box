@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: joyful-sparkle-box
+    env: node
+    buildCommand: npm install && npm install --prefix backend && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: VITE_BACKEND_URL
+        sync: false
+      - key: VITE_PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false

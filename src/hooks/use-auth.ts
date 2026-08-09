@@ -1,46 +1,68 @@
 import { useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
 
 export type AppRole = "student" | "teacher" | "admin";
+export type User = { id: string; email: string; role: AppRole };
 
 export function useAuth() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<any | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        setTimeout(() => {
-          supabase.from("user_roles").select("role").eq("user_id", s.user.id)
-            .then(({ data }) => setRoles((data ?? []).map((r) => r.role as AppRole)));
-        }, 0);
-      } else {
+    // Developer override
+    try {
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      if (import.meta.env.DEV && params?.get("asAdmin") === "1") {
+        const fakeUser = { id: "dev-admin", email: "admin@local", role: "admin" } as User;
+        setUser(fakeUser);
+        setRoles(["admin"]);
+        setLoading(false);
+        return;
+      }
+    } catch (e) { }
+
+    const fetchMe = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error("No token");
+        
+        const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+        const res = await fetch(`${backendUrl}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (!res.ok) throw new Error("Unauthorized");
+        const data = await res.json();
+        setUser(data.user);
+        setRoles([data.user.role]);
+      } catch (err) {
+        setUser(null);
         setRoles([]);
+        localStorage.removeItem('token');
+      } finally {
+        setLoading(false);
       }
-    });
+    };
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        supabase.from("user_roles").select("role").eq("user_id", s.user.id)
-          .then(({ data }) => setRoles((data ?? []).map((r) => r.role as AppRole)));
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    fetchMe();
+    
+    // Listen for storage events (if they login in another tab)
+    const handleStorage = () => fetchMe();
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const signOut = async () => { await supabase.auth.signOut(); };
+  const signOut = async () => {
+    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+    await fetch(`${backendUrl}/api/auth/logout`, { method: "POST" });
+    localStorage.removeItem('token');
+    setUser(null);
+    setRoles([]);
+  };
 
   return {
-    session,
+    session, // provided for backward compatibility
     user,
     roles,
     loading,
