@@ -22,6 +22,7 @@ CREATE TABLE profiles (
     full_name TEXT NOT NULL,
     avatar_url TEXT,
     role user_role DEFAULT 'student',
+    phone TEXT,
     bio TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -46,6 +47,13 @@ CREATE TABLE teacher_profiles (
     user_id UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
     video_url TEXT,
     background TEXT,
+    hourly_rate_cents INTEGER DEFAULT 4000,
+    years_experience INTEGER DEFAULT 0,
+    location TEXT,
+    exam_types JSONB DEFAULT '[]'::jsonb,
+    languages JSONB DEFAULT '[]'::jsonb,
+    primary_subject_id UUID REFERENCES subjects(id) ON DELETE SET NULL,
+    is_active BOOLEAN DEFAULT true,
     verification_status verification_status DEFAULT 'unverified',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -57,6 +65,14 @@ CREATE TABLE teacher_topics (
     PRIMARY KEY (teacher_id, topic_id)
 );
 
+-- Tutor Subjects (Direct Subject Mapping)
+CREATE TABLE tutor_subjects (
+    teacher_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (teacher_id, subject_id)
+);
+
 CREATE TABLE teacher_availability (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     teacher_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
@@ -66,7 +82,7 @@ CREATE TABLE teacher_availability (
     UNIQUE(teacher_id, day_of_week, start_hour)
 );
 
--- 6. Create Bookings & Transactions
+-- 6. Create Bookings & Comprehensive Transactions
 CREATE TABLE bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
@@ -76,6 +92,8 @@ CREATE TABLE bookings (
     duration_minutes INTEGER DEFAULT 60,
     status booking_status DEFAULT 'pending',
     price_cents INTEGER NOT NULL,
+    paystack_reference TEXT,
+    paid_out BOOLEAN DEFAULT false,
     room_id TEXT,
     location TEXT,
     notes TEXT,
@@ -85,15 +103,76 @@ CREATE TABLE bookings (
 CREATE TABLE transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+    student_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
     amount_cents INTEGER NOT NULL,
-    status transaction_status DEFAULT 'pending',
     currency TEXT DEFAULT 'GHS',
-    stripe_payment_intent TEXT,
-    stripe_session_id TEXT,
+    paystack_reference TEXT,
+    status transaction_status DEFAULT 'pending',
+    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. Create Other Features
+-- 7. Room Sessions (Live Virtual Classroom Sessions)
+CREATE TABLE room_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+    room_id TEXT NOT NULL,
+    host_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    status TEXT DEFAULT 'active',
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 8. Favorites (Student saved tutors)
+CREATE TABLE favorites (
+    student_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    teacher_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (student_id, teacher_id)
+);
+
+-- 9. Payouts (MoMo Remittance Log)
+CREATE TABLE payouts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    teacher_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    amount_cents INTEGER NOT NULL,
+    paid_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 10. Conversations & Direct Messages
+CREATE TABLE conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    participant_one UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    participant_two UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    last_message_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (participant_one, participant_two)
+);
+
+CREATE TABLE messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+    sender_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    receiver_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. Support & Dispute Tickets
+CREATE TABLE support_tickets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    reporter_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+    booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+    category TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT DEFAULT 'open',
+    resolution_notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 12. Course Materials & Notes
 CREATE TABLE course_materials (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
@@ -104,6 +183,7 @@ CREATE TABLE course_materials (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 13. Lesson Ratings & Reviews
 CREATE TABLE ratings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE UNIQUE,
@@ -114,15 +194,19 @@ CREATE TABLE ratings (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 14. System Notifications
 CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     message TEXT NOT NULL,
-    read BOOLEAN DEFAULT false,
+    type TEXT DEFAULT 'general',
+    link TEXT,
+    is_read BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. Insert Some Default Subjects (So the app isn't empty!)
+-- 15. Insert Default Core Ghanaian WAEC Curriculum Subjects
 INSERT INTO subjects (name) VALUES 
-('Mathematics'), ('Science'), ('English Language'), ('Social Studies');
+('Mathematics'), ('Science'), ('English Language'), ('Social Studies')
+ON CONFLICT (name) DO NOTHING;

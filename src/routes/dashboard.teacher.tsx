@@ -7,7 +7,7 @@ import {
   Calendar,
   User,
   Star,
-  DollarSign,
+  Banknote,
   Settings,
   Bell,
   CheckCircle,
@@ -21,8 +21,14 @@ import {
   Sparkles,
   GraduationCap,
   Award,
-  BookOpen
+  BookOpen,
+  AlertCircle,
+  CreditCard,
+  CheckCheck,
+  X,
+  CalendarCheck,
 } from "lucide-react";
+import { ReportDialog } from "@/components/report-dialog";
 
 export const Route = createFileRoute("/dashboard/teacher")({ component: TeacherDashboard });
 
@@ -56,10 +62,11 @@ function TeacherDashboard() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState<"overview" | "calendar" | "availability" | "profile" | "reviews" | "earnings">("overview");
+  const [tab, setTab] = useState<"overview" | "calendar" | "availability" | "profile" | "reviews" | "earnings" | "support">("overview");
   const [dashData, setDashData] = useState<any>(null);
   const [headline, setHeadline] = useState("");
   const [bio, setBio] = useState("");
+  const [phone, setPhone] = useState("");
   const [rate, setRate] = useState(40);
   const [years, setYears] = useState(0);
   const [primarySubject, setPrimarySubject] = useState("");
@@ -73,10 +80,46 @@ function TeacherDashboard() {
   const [saving, setSaving] = useState(false);
   const [bookingFilter, setBookingFilter] = useState<"all" | "pending" | "confirmed" | "completed" | "cancelled">("all");
   const [loadingData, setLoadingData] = useState(true);
+  const [myTickets, setMyTickets] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [reportModal, setReportModal] = useState<{ open: boolean; bookingId: string | null; label: string | null }>({
+    open: false,
+    bookingId: null,
+    label: null,
+  });
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [user, loading, navigate]);
+
+  const loadNotifications = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${BACKEND}/api/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications ?? []);
+      }
+    } catch (e) {}
+  };
+
+  const loadMyTickets = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${BACKEND}/api/support/my-tickets`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMyTickets(data.tickets ?? []);
+      }
+    } catch (e) {}
+  };
 
   const loadDashboard = async () => {
     setLoadingData(true);
@@ -98,6 +141,7 @@ function TeacherDashboard() {
         setYears(data.teacherProfile.years_experience ?? 0);
       }
       if (data.bio) setBio(data.bio);
+      if (data.phone) setPhone(data.phone);
       const tp = new Set<string>();
       const sp = new Set<string>();
       (data.teacherTopics ?? []).forEach((r: any) => {
@@ -115,8 +159,42 @@ function TeacherDashboard() {
   };
 
   useEffect(() => {
-    if (user) loadDashboard();
+    if (user) {
+      loadDashboard();
+      loadMyTickets();
+      loadNotifications();
+      const interval = setInterval(() => {
+        loadNotifications();
+      }, 6000);
+      return () => clearInterval(interval);
+    }
   }, [user]);
+
+  const markAllRead = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    await fetch(`${BACKEND}/api/notifications/read-all`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+  };
+
+  const handleNotificationClick = async (n: any) => {
+    const token = localStorage.getItem("token");
+    if (token && !n.is_read) {
+      await fetch(`${BACKEND}/api/notifications/${n.id}/read`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, is_read: true } : item));
+    }
+    setNotifOpen(false);
+    if (n.link) {
+      if (n.link === "/dashboard/teacher") setTab("earnings");
+      else navigate({ to: n.link as any });
+    }
+  };
 
   const toggleExam = (e: ExamType) => setExamTypes(prev => {
     const n = new Set(prev); n.has(e) ? n.delete(e) : n.add(e); return n;
@@ -137,6 +215,7 @@ function TeacherDashboard() {
       body: JSON.stringify({
         headline,
         bio,
+        phone,
         rate,
         years,
         primarySubject,
@@ -195,21 +274,25 @@ function TeacherDashboard() {
   const bookings = dashData?.bookings ?? [];
   const filteredBookings = bookingFilter === "all" ? bookings : bookings.filter((b: any) => b.status === bookingFilter);
   const reviews = dashData?.reviews ?? [];
-  const notifications = dashData?.notifications ?? [];
   const avgRating = reviews.length > 0 ? (reviews.reduce((s: number, r: any) => s + r.stars, 0) / reviews.length) : null;
   const totalEarningsCents = bookings
-    .filter((b: any) => b.status === "completed" || b.status === "confirmed")
+    .filter((b: any) => b.status === "completed")
+    .reduce((sum: number, b: any) => sum + (b.price_cents ?? 4000), 0);
+  const pendingPayoutCents = bookings
+    .filter((b: any) => b.status === "completed" && !b.paid_out)
     .reduce((sum: number, b: any) => sum + (b.price_cents ?? 4000), 0);
 
   const upcomingBooking = bookings.find((b: any) => b.status === "confirmed" && new Date(b.scheduled_at) > new Date());
+
+  const unreadCount = notifications.filter((n: any) => !n.is_read).length;
 
   const NAV_ITEMS = [
     { key: "overview", label: "Overview", icon: Clock },
     { key: "calendar", label: "My Calendar & Bookings", icon: Calendar, badge: bookings.filter((b: any) => b.status === "pending").length || undefined },
     { key: "availability", label: "Set Availability", icon: Sliders },
     { key: "profile", label: "Profile & Subjects", icon: User },
-    { key: "reviews", label: "Student Reviews", icon: Star, badge: reviews.length || undefined },
-    { key: "earnings", label: "Earnings & Payouts", icon: DollarSign },
+    { key: "earnings", label: "Earnings & Payouts", icon: Banknote },
+    { key: "support", label: "Help & Support Tickets", icon: AlertCircle, badge: myTickets.filter((t: any) => t.status !== 'resolved').length || undefined },
   ] as const;
 
   return (
@@ -248,7 +331,7 @@ function TeacherDashboard() {
                   <Icon className="size-4 shrink-0" />
                   <span>{item.label}</span>
                 </div>
-                {item.badge !== undefined && (
+                {'badge' in item && item.badge !== undefined && (
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                     isActive ? "bg-white text-brand" : "bg-brand/10 text-brand"
                   }`}>
@@ -269,6 +352,14 @@ function TeacherDashboard() {
             <MessageSquare className="size-4 text-muted-foreground" />
             <span>Messages</span>
           </Link>
+
+          <button
+            onClick={() => setReportModal({ open: true, bookingId: null, label: null })}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all text-left"
+          >
+            <AlertCircle className="size-4 text-muted-foreground group-hover:text-destructive" />
+            <span>Help & Support</span>
+          </button>
 
           {user?.id && (
             <Link
@@ -309,6 +400,7 @@ function TeacherDashboard() {
               {tab === "profile" && "Teacher Profile & Specialties"}
               {tab === "reviews" && "Student Ratings & Reviews"}
               {tab === "earnings" && "Earnings & Mobile Money"}
+              {tab === "support" && "Help & Support Tickets"}
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
               Welcome back, {user?.email?.split("@")[0] ?? "Teacher"}. Here is what’s happening with your students today.
@@ -316,6 +408,94 @@ function TeacherDashboard() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Live Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => setNotifOpen(v => !v)}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card hover:bg-secondary transition-colors"
+                aria-label="Notifications"
+              >
+                <Bell className="size-4 text-ink" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white animate-pulse">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-2 w-88 rounded-2xl border border-border bg-card shadow-2xl z-50 overflow-hidden fade-in">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-secondary/50">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold">Notifications</p>
+                      {unreadCount > 0 && (
+                        <span className="rounded-full bg-brand/15 text-brand px-2 py-0.5 text-[10px] font-bold">
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={markAllRead}
+                          className="text-[11px] font-medium text-brand hover:underline flex items-center gap-1"
+                        >
+                          <CheckCheck className="size-3" />
+                          Mark read
+                        </button>
+                      )}
+                      <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground">
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-border">
+                    {notifications.length === 0 ? (
+                      <p className="px-4 py-8 text-center text-xs text-muted-foreground">No new notifications</p>
+                    ) : (
+                      notifications.map(n => {
+                        const Icon = n.type === 'payment' ? CreditCard :
+                                     n.type === 'message' ? MessageSquare :
+                                     n.type === 'support' ? AlertCircle : CalendarCheck;
+                        const iconBg = n.type === 'payment' ? 'bg-emerald-100 text-emerald-700' :
+                                       n.type === 'message' ? 'bg-blue-100 text-blue-700' :
+                                       n.type === 'support' ? 'bg-amber-100 text-amber-700' :
+                                       'bg-purple-100 text-purple-700';
+
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => handleNotificationClick(n)}
+                            className={`p-3.5 hover:bg-secondary/60 transition-colors cursor-pointer flex items-start gap-3 ${
+                              !n.is_read ? 'bg-brand/5' : ''
+                            }`}
+                          >
+                            <div className={`size-8 rounded-xl shrink-0 flex items-center justify-center ${iconBg}`}>
+                              <Icon className="size-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <p className={`text-xs truncate ${!n.is_read ? 'font-bold text-ink' : 'font-medium text-ink/80'}`}>
+                                  {n.title}
+                                </p>
+                                {!n.is_read && <span className="size-2 rounded-full bg-brand shrink-0" />}
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                                {n.message}
+                              </p>
+                              <p className="mt-1 text-[9px] text-muted-foreground/70">
+                                {new Date(n.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {user?.id && (
               <Link
                 to="/teacher/$id"
@@ -335,10 +515,10 @@ function TeacherDashboard() {
         {/* ── Stat Cards Grid ── */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
           {[
-            { label: "Total Bookings", value: bookings.length, icon: Calendar, color: "text-brand" },
-            { label: "Confirmed Sessions", value: bookings.filter((b: any) => b.status === "confirmed").length, icon: CheckCircle, color: "text-green-600" },
-            { label: "Avg. Rating", value: avgRating ? `${avgRating.toFixed(1)} ★` : "New (5.0 ★)", icon: Star, color: "text-amber-500" },
-            { label: "Gross Revenue", value: `GH₵${(totalEarningsCents / 100).toFixed(0)}`, icon: DollarSign, color: "text-blue-600" },
+            { label: "Total Bookings", value: bookings.length, sub: "All time sessions", icon: Calendar, color: "text-brand" },
+            { label: "Confirmed Sessions", value: bookings.filter((b: any) => b.status === "confirmed").length, sub: "Upcoming lessons", icon: CheckCircle, color: "text-green-600" },
+            { label: "Avg. Rating", value: avgRating ? `${avgRating.toFixed(1)} ★` : "New (5.0 ★)", sub: `${reviews.length} reviews`, icon: Star, color: "text-amber-500" },
+            { label: "Your Net Take-Home (85%)", value: `GHS ${((totalEarningsCents * 0.85) / 100).toFixed(2)}`, sub: `After 15% platform deduction · GHS ${(totalEarningsCents / 100).toFixed(2)} gross`, icon: Banknote, color: "text-emerald-600" },
           ].map((s, idx) => {
             const Icon = s.icon;
             return (
@@ -347,7 +527,8 @@ function TeacherDashboard() {
                   <p className="text-xs font-semibold text-muted-foreground">{s.label}</p>
                   <Icon className={`size-4 ${s.color}`} />
                 </div>
-                <p className="mt-2 font-serif text-3xl font-bold text-ink">{s.value}</p>
+                <p className="mt-2 font-serif text-2xl font-bold text-ink">{s.value}</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">{s.sub}</p>
               </div>
             );
           })}
@@ -481,24 +662,22 @@ function TeacherDashboard() {
                           }`}>{b.status}</span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          ⏰ {formatDateTime(b.scheduled_at)} · Fee: <strong className="text-ink">GH₵{(b.price_cents / 100).toFixed(2)}</strong>
+                          ⏰ {formatDateTime(b.scheduled_at)} · Student Paid: <strong className="text-ink">GHS {(b.price_cents / 100).toFixed(2)}</strong> · Fee (-15%): <span className="text-destructive font-medium">-GHS {((b.price_cents * 0.15) / 100).toFixed(2)}</span> · Your Net: <strong className="text-emerald-700">GHS {((b.price_cents * 0.85) / 100).toFixed(2)}</strong>
                         </p>
                       </div>
 
                       <div className="flex items-center gap-2">
                         {b.status === "pending" && (
                           <>
-                            <button
-                              onClick={() => updateBookingStatus(b.id, "confirmed")}
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"
-                            >
-                              Confirm Booking
-                            </button>
+                            <span className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-1.5">
+                              <Clock className="size-3.5 text-amber-600" />
+                              Awaiting Student Payment
+                            </span>
                             <button
                               onClick={() => updateBookingStatus(b.id, "cancelled")}
-                              className="px-3 py-2 bg-card border border-border text-destructive rounded-lg text-xs font-semibold hover:bg-destructive/10"
+                              className="px-3 py-1.5 bg-card border border-border text-destructive rounded-lg text-xs font-semibold hover:bg-destructive/10 transition-colors"
                             >
-                              Decline
+                              Decline Slot
                             </button>
                           </>
                         )}
@@ -525,6 +704,28 @@ function TeacherDashboard() {
                             </button>
                           </>
                         )}
+                        {b.student_id && (
+                          <Link
+                            to="/messages"
+                            search={{ contactId: b.student_id }}
+                            className="px-3 py-2 border border-border text-xs font-semibold rounded-lg hover:bg-secondary flex items-center gap-1"
+                          >
+                            <MessageSquare className="size-3 text-brand" />
+                            Message
+                          </Link>
+                        )}
+                        <button
+                          onClick={() => setReportModal({
+                            open: true,
+                            bookingId: b.id,
+                            label: `${b.profiles?.full_name ?? "Student"} · ${formatDateTime(b.scheduled_at)}`,
+                          })}
+                          className="px-2.5 py-2 border border-border text-xs font-semibold rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-1"
+                          title="Report an issue with this session"
+                        >
+                          <AlertCircle className="size-3 text-destructive" />
+                          Report
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -708,76 +909,203 @@ function TeacherDashboard() {
           </div>
         )}
 
-        {/* ── TAB 5: REVIEWS ── */}
-        {tab === "reviews" && (
-          <div className="rounded-2xl bg-card border border-border p-6 shadow-sm fade-in space-y-6">
-            <div className="flex items-center justify-between">
+
+
+        {/* ── TAB 6: EARNINGS ── */}
+        {tab === "earnings" && (
+          <div className="space-y-6 fade-in">
+            <div className="rounded-2xl bg-card border border-border p-6 shadow-sm space-y-6">
               <div>
-                <h3 className="font-serif text-xl font-bold text-ink">Student Reviews</h3>
+                <h3 className="font-serif text-xl font-bold text-ink">Earnings &amp; Payout Overview</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Verified reviews left by students after completing live lessons with you.
+                  Platform fee (15%) is automatically deducted, leaving 85% net take-home earnings remitted directly to your Mobile Money wallet.
                 </p>
               </div>
-              {avgRating && (
-                <div className="flex items-center gap-2 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
-                  <span className="font-serif text-2xl font-bold text-amber-700">{avgRating.toFixed(1)}</span>
-                  <div className="text-amber-500 text-sm font-bold">{"★".repeat(Math.round(avgRating))}</div>
+
+              <div className="grid gap-4 sm:grid-cols-4">
+                <div className="p-4 rounded-xl bg-secondary/50 border border-border">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Gross Booking Volume (100%)</p>
+                  <p className="mt-2 font-serif text-2xl font-bold text-ink">GHS {(totalEarningsCents / 100).toFixed(2)}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-red-50/50 border border-red-200">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-destructive font-semibold">Platform Fee Deduction (-15%)</p>
+                  <p className="mt-2 font-serif text-2xl font-bold text-destructive">-GHS {((totalEarningsCents * 0.15) / 100).toFixed(2)}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-green-50 border border-green-200">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-green-800 font-semibold">Your Net Take-Home (85%)</p>
+                  <p className="mt-2 font-serif text-2xl font-bold text-green-700">GHS {((totalEarningsCents * 0.85) / 100).toFixed(2)}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800 font-semibold">Pending MoMo Payout</p>
+                  <p className="mt-2 font-serif text-2xl font-bold text-amber-700">GHS {((pendingPayoutCents * 0.85) / 100).toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-brand-soft border border-brand/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-xs text-brand uppercase tracking-wider">Mobile Money Payout Setup</h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Payouts are settled automatically after each completed lesson. Ensure this is an active MoMo wallet (MTN MoMo, Telecel Cash, AirtelTigo).
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 max-w-sm flex gap-2">
+                  <input
+                    type="tel"
+                    placeholder="e.g. 0241234567"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-brand/30 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand"
+                  />
+                  <button
+                    onClick={saveProfile}
+                    disabled={saving}
+                    className="h-10 px-4 rounded-lg bg-brand text-primary-foreground text-xs font-semibold shadow-sm hover:bg-brand/90 disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? "..." : "Save MoMo"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Completed Sessions Deduction Breakdown Table */}
+            <div className="rounded-2xl bg-card border border-border p-6 shadow-sm">
+              <h4 className="font-serif text-lg font-bold text-ink mb-1">Completed Lessons &amp; Net Take-Home Log</h4>
+              <p className="text-xs text-muted-foreground mb-4">Complete breakdown of gross student fees, 15% platform deduction, and your 85% payout per lesson.</p>
+
+              {bookings.filter((b: any) => b.status === "completed").length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  No completed sessions yet. Complete your first lesson to view the itemized earnings breakdown!
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-border text-muted-foreground">
+                        <th className="pb-3 font-semibold">Date &amp; Time</th>
+                        <th className="pb-3 font-semibold">Student</th>
+                        <th className="pb-3 font-semibold">Gross Fee (100%)</th>
+                        <th className="pb-3 font-semibold text-destructive">Platform Fee (-15%)</th>
+                        <th className="pb-3 font-semibold text-emerald-700">Your Net Payout (85%)</th>
+                        <th className="pb-3 font-semibold text-right">Settlement Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {bookings
+                        .filter((b: any) => b.status === "completed")
+                        .map((b: any) => {
+                          const gross = b.price_cents / 100;
+                          const fee = (b.price_cents * 0.15) / 100;
+                          const net = (b.price_cents * 0.85) / 100;
+
+                          return (
+                            <tr key={b.id} className="hover:bg-secondary/30 transition-colors">
+                              <td className="py-3 font-medium text-ink">{formatDateTime(b.scheduled_at)}</td>
+                              <td className="py-3">{b.profiles?.full_name ?? "Student"}</td>
+                              <td className="py-3 font-semibold">GHS {gross.toFixed(2)}</td>
+                              <td className="py-3 text-destructive font-medium">-GHS {fee.toFixed(2)}</td>
+                              <td className="py-3 font-bold text-emerald-700">GHS {net.toFixed(2)}</td>
+                              <td className="py-3 text-right">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                  b.paid_out ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"
+                                }`}>
+                                  {b.paid_out ? "✓ Paid to MoMo" : "⏳ Queued for Payout"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
+          </div>
+        )}
 
-            {reviews.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">No reviews yet. Complete your first session to receive reviews!</p>
+        {/* ── TAB 7: SUPPORT & DISPUTE TICKETS ── */}
+        {tab === "support" && (
+          <div className="rounded-2xl bg-card border border-border p-6 shadow-sm fade-in space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-ink">My Support Reports &amp; Admin Responses</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Track help tickets submitted to QuickTutor Administration and view admin answers and dispute resolutions.
+                </p>
+              </div>
+              <button
+                onClick={() => setReportModal({ open: true, bookingId: null, label: null })}
+                className="h-9 px-4 rounded-xl bg-brand text-primary-foreground text-xs font-semibold hover:bg-brand/90 transition-colors"
+              >
+                + New Support Ticket
+              </button>
+            </div>
+
+            {myTickets.length === 0 ? (
+              <div className="py-12 text-center">
+                <AlertCircle className="size-10 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm font-medium text-ink">No support tickets filed</p>
+                <p className="text-xs text-muted-foreground mt-1">If you have issues with payments, students, or sessions, click above to report directly to admin.</p>
+              </div>
             ) : (
               <div className="divide-y divide-border">
-                {reviews.map((r: any, idx: number) => (
-                  <div key={idx} className="py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-amber-500 text-sm">{"★".repeat(r.stars)}</div>
-                      <span className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</span>
+                {myTickets.map((t) => (
+                  <div key={t.id} className="py-4 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          {t.category.replace(/_/g, " ")}
+                        </span>
+                        <h4 className="font-bold text-sm text-ink">{t.subject}</h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          t.status === 'open' ? 'bg-red-100 text-red-700' :
+                          t.status === 'in_progress' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {t.status.replace('_', ' ')}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</span>
+                      </div>
                     </div>
-                    {r.comment && <p className="mt-2 text-xs text-ink italic">"{r.comment}"</p>}
+
+                    <p className="text-xs text-muted-foreground bg-surface/60 p-3 rounded-xl border border-border/60">
+                      <strong className="text-ink">Your Description:</strong> {t.description}
+                    </p>
+
+                    {t.resolution_notes ? (
+                      <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3.5 text-xs text-emerald-900 space-y-1">
+                        <p className="font-bold flex items-center gap-1.5 text-emerald-800">
+                          <span>🛡️ Admin Resolution &amp; Response:</span>
+                          {t.resolved_at && <span className="font-normal text-[10px] text-emerald-700">({new Date(t.resolved_at).toLocaleDateString()})</span>}
+                        </p>
+                        <p className="text-emerald-800 font-medium pl-5">{t.resolution_notes}</p>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-amber-700 italic pl-1 flex items-center gap-1">
+                        <span>⏳ Status:</span> Admin is currently investigating your ticket. You will receive an alert once resolved.
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
         )}
-
-        {/* ── TAB 6: EARNINGS ── */}
-        {tab === "earnings" && (
-          <div className="rounded-2xl bg-card border border-border p-6 shadow-sm fade-in space-y-6">
-            <div>
-              <h3 className="font-serif text-xl font-bold text-ink">Earnings &amp; Payout Overview</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                We remit payments directly to your Mobile Money (MTN MoMo, Telecel Cash, AirtelTigo) or bank account.
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Gross Booking Volume</p>
-                <p className="mt-2 font-serif text-2xl font-bold text-ink">GH₵{(totalEarningsCents / 100).toFixed(2)}</p>
-              </div>
-              <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Platform Commission (15%)</p>
-                <p className="mt-2 font-serif text-2xl font-bold text-muted-foreground">GH₵{((totalEarningsCents * 0.15) / 100).toFixed(2)}</p>
-              </div>
-              <div className="p-4 rounded-xl bg-green-50 border border-green-200">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-green-800">Your Net Payout (85%)</p>
-                <p className="mt-2 font-serif text-2xl font-bold text-green-700">GH₵{((totalEarningsCents * 0.85) / 100).toFixed(2)}</p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-brand-soft border border-brand/20">
-              <h4 className="font-bold text-xs text-brand uppercase tracking-wider">Mobile Money Payout Setup</h4>
-              <p className="text-xs text-muted-foreground mt-1">
-                Payouts are settled automatically after each completed lesson. Ensure your profile phone number matches your active MoMo wallet.
-              </p>
-            </div>
-          </div>
-        )}
       </main>
+
+      {/* Report Modal */}
+      <ReportDialog
+        open={reportModal.open}
+        onClose={() => {
+          setReportModal({ open: false, bookingId: null, label: null });
+          loadMyTickets();
+        }}
+        bookingId={reportModal.bookingId}
+        bookingLabel={reportModal.label}
+      />
     </div>
   );
 }

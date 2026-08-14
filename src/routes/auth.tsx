@@ -313,6 +313,24 @@ function AuthPage() {
           <button type="submit" disabled={busy} className="w-full rounded-xl bg-brand py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60 hover:bg-brand/90 transition-colors">
             {busy ? "Please wait..." : mode === "signup" ? "Create account" : "Sign in"}
           </button>
+
+          {mode === "signup" && (
+            <p className="text-center text-[11px] text-muted-foreground leading-relaxed pt-1">
+              By creating an account, you agree to our{" "}
+              <Link to="/terms" className="text-brand font-semibold hover:underline">
+                Terms of Service
+              </Link>
+              ,{" "}
+              <Link to="/terms" className="text-brand font-semibold hover:underline">
+                Escrow Policies
+              </Link>
+              , and{" "}
+              <Link to="/terms" className="text-brand font-semibold hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          )}
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

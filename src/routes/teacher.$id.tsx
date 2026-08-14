@@ -4,6 +4,7 @@ import { SiteNav, SiteFooter } from "@/components/site-nav";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { BookingDialog } from "@/components/booking-dialog";
+import { MessageSquare } from "lucide-react";
 
 export const Route = createFileRoute("/teacher/$id")({
   component: TeacherDetail,
@@ -20,6 +21,16 @@ const EXAM_TYPES: { value: ExamType; label: string }[] = [
 ];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+type RatingItem = {
+  id?: string;
+  stars: number;
+  comment: string | null;
+  created_at?: string;
+  student_name?: string;
+  student_avatar?: string | null;
+  bookings?: { scheduled_at: string; location: string | null } | null;
+};
+
 type TeacherProfile = {
   user_id: string;
   headline: string;
@@ -28,6 +39,8 @@ type TeacherProfile = {
   location: string;
   verification_status: "unverified" | "pending" | "verified" | "rejected";
   exam_types: ExamType[];
+  avg_stars?: number | null;
+  review_count?: number;
   profiles: { full_name: string; bio: string | null; avatar_url: string | null } | null;
   subjects: { name: string } | null;
 };
@@ -40,7 +53,7 @@ function TeacherDetail() {
   const navigate = useNavigate();
   const [t, setT] = useState<TeacherProfile | null>(null);
   const [topics, setTopics] = useState<{ id: string; name: string; is_specialty: boolean }[]>([]);
-  const [ratings, setRatings] = useState<{ stars: number; comment: string | null; bookings: { scheduled_at: string; location: string | null } | null }[]>([]);
+  const [ratings, setRatings] = useState<RatingItem[]>([]);
   const [availability, setAvailability] = useState<{ day_of_week: number; start_hour: number; end_hour: number }[]>([]);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -58,7 +71,15 @@ function TeacherDetail() {
       .catch(() => setNotFound(true));
   }, [id]);
 
-  const avg = ratings.length ? (ratings.reduce((a, r) => a + r.stars, 0) / ratings.length).toFixed(1) : null;
+  // Automatic calculated average rating from total accumulation of ratings
+  const totalStars = ratings.reduce((a, r) => a + (Number(r.stars) || 0), 0);
+  const avg = ratings.length > 0 ? (totalStars / ratings.length).toFixed(1) : null;
+
+  const starCounts = [5, 4, 3, 2, 1].map(stars => {
+    const count = ratings.filter(r => r.stars === stars).length;
+    const pct = ratings.length > 0 ? Math.round((count / ratings.length) * 100) : 0;
+    return { stars, count, pct };
+  });
 
   const weeklyAvailability = DAYS.map((day, dow) => {
     const slots = availability.filter(s => s.day_of_week === dow).map(s => `${s.start_hour}:00 – ${s.end_hour}:00`);
@@ -144,6 +165,13 @@ function TeacherDetail() {
                 >
                   Book a session
                 </button>
+                <button
+                  onClick={() => isAuthed ? navigate({ to: "/messages", search: { contactId: id } }) : navigate({ to: "/auth", search: { mode: "login", role: "student" } })}
+                  className="mt-2 w-full h-10 rounded-full border border-white/20 text-xs font-semibold text-primary-foreground hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
+                >
+                  <MessageSquare className="size-3.5" />
+                  Message Tutor
+                </button>
               </div>
             </div>
           </div>
@@ -178,33 +206,95 @@ function TeacherDetail() {
               </div>
             )}
 
-            {/* Reviews */}
-            <div className="rounded-2xl bg-card p-6 ring-1 ring-black/5">
-              <div className="flex items-center gap-4 mb-6">
-                <h2 className="font-serif text-2xl">Reviews</h2>
-                {avg && (
-                  <div className="flex items-center gap-2">
-                    <span className="font-serif text-4xl">{avg}</span>
+            {/* Verified Student Reviews & Ratings */}
+            <div className="rounded-2xl bg-card p-6 ring-1 ring-black/5 shadow-sm space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
+                <div>
+                  <h2 className="font-serif text-2xl font-bold text-ink">Student Reviews &amp; Ratings</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Automatically accumulated and averaged from verified completed lessons.
+                  </p>
+                </div>
+                {avg ? (
+                  <div className="flex items-center gap-3 bg-amber-500/10 px-4 py-2.5 rounded-2xl border border-amber-500/20">
+                    <span className="font-serif text-3xl font-bold text-amber-600 dark:text-amber-400">{avg}</span>
                     <div>
-                      <div className="text-accent-gold">{"★".repeat(Math.round(Number(avg)))}</div>
-                      <p className="text-[10px] text-muted-foreground">{ratings.length} review{ratings.length === 1 ? "" : "s"}</p>
+                      <div className="text-amber-500 text-sm font-bold">{"★".repeat(Math.round(Number(avg)))}{"☆".repeat(5 - Math.round(Number(avg)))}</div>
+                      <p className="text-[10px] font-semibold text-muted-foreground">{ratings.length} verified rating{ratings.length === 1 ? "" : "s"}</p>
                     </div>
                   </div>
+                ) : (
+                  <span className="px-3 py-1 rounded-full bg-secondary text-xs text-muted-foreground font-medium">New Tutor</span>
                 )}
               </div>
-              {ratings.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No reviews yet. Be the first to review after a session!</p>
-              ) : (
-                <div className="space-y-4">
-                  {ratings.map((r, i) => (
-                    <div key={i} className="border-t border-border pt-4 first:border-0 first:pt-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-accent-gold">{"★".repeat(r.stars)}</span>
-                        {r.bookings?.scheduled_at && (
-                          <span className="text-[11px] text-muted-foreground">{new Date(r.bookings.scheduled_at).toLocaleDateString()}</span>
-                        )}
+
+              {ratings.length > 0 && (
+                <div className="grid sm:grid-cols-2 gap-4 bg-secondary/30 p-4 rounded-xl border border-border">
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Rating Distribution</p>
+                    {starCounts.map(({ stars, count, pct }) => (
+                      <div key={stars} className="flex items-center gap-2 text-xs">
+                        <span className="w-6 text-muted-foreground font-semibold">{stars} ★</span>
+                        <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
+                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="w-8 text-right text-[10px] text-muted-foreground">{count}</span>
                       </div>
-                      {r.comment && <p className="mt-2 text-sm text-muted-foreground italic">"{r.comment}"</p>}
+                    ))}
+                  </div>
+                  <div className="flex flex-col justify-center items-start sm:border-l sm:border-border sm:pl-4 space-y-1">
+                    <p className="text-xs font-semibold text-ink">100% Verified Reviews</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Only students who have completed and paid for a session can submit a rating. Ratings cannot be manually altered.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {ratings.length === 0 ? (
+                <div className="py-8 text-center space-y-2">
+                  <div className="text-2xl">✨</div>
+                  <p className="text-sm font-semibold text-ink">No reviews yet</p>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    Be the first student to book a session with {t.profiles?.full_name?.split(" ")[0]} and leave a review after your lesson!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4 pt-2">
+                  {ratings.map((r, i) => (
+                    <div key={r.id || i} className="p-4 rounded-xl bg-surface border border-border space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-8 rounded-full bg-brand/10 border border-brand/20 flex items-center justify-center font-bold text-xs text-brand overflow-hidden">
+                            {r.student_avatar ? (
+                              <img src={r.student_avatar} alt="" className="size-full object-cover" />
+                            ) : (
+                              (r.student_name?.[0] ?? "S")
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-ink">{r.student_name || "Verified Student"}</p>
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold">
+                                Verified Lesson
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              {r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : (r.bookings?.scheduled_at ? new Date(r.bookings.scheduled_at).toLocaleDateString() : 'Recent')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center text-amber-500 text-xs font-bold">
+                          {"★".repeat(r.stars)}
+                          <span className="text-muted-foreground/30">{"★".repeat(5 - r.stars)}</span>
+                        </div>
+                      </div>
+
+                      {r.comment && (
+                        <p className="text-xs text-ink/90 italic leading-relaxed pl-1 border-l-2 border-brand/40">
+                          "{r.comment}"
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

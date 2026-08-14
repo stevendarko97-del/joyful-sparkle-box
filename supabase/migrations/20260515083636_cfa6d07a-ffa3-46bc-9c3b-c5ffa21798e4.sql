@@ -148,16 +148,16 @@ CREATE TYPE public.transaction_status AS ENUM ('pending','succeeded','failed','r
 CREATE TABLE public.transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   amount_cents INTEGER NOT NULL,
-  currency TEXT NOT NULL DEFAULT 'usd',
+  currency TEXT NOT NULL DEFAULT 'GHS',
   status transaction_status NOT NULL DEFAULT 'pending',
-  stripe_payment_intent TEXT,
-  stripe_session_id TEXT,
+  paystack_reference TEXT,
+  transaction_date TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "users view own transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "users view own transactions" ON public.transactions FOR SELECT USING (auth.uid() = student_id);
 CREATE POLICY "admins view all transactions" ON public.transactions FOR SELECT USING (public.has_role(auth.uid(),'admin'));
 CREATE POLICY "admins manage transactions" ON public.transactions FOR ALL USING (public.has_role(auth.uid(),'admin')) WITH CHECK (public.has_role(auth.uid(),'admin'));
 

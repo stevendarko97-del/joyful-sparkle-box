@@ -13,10 +13,14 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as EducatorsRouteImport } from './routes/educators'
+import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as MessagesRouteImport } from './routes/messages'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as TeachersRouteImport } from './routes/teachers'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as DashboardMaterialsRouteImport } from './routes/dashboard.materials'
 import { Route as DashboardStudentRouteImport } from './routes/dashboard.student'
 import { Route as DashboardTeacherRouteImport } from './routes/dashboard.teacher'
@@ -43,6 +47,11 @@ const EducatorsRoute = EducatorsRouteImport.update({
   path: '/educators',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeedbackRoute = FeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
@@ -58,9 +67,24 @@ const MessagesRoute = MessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TeachersRoute = TeachersRouteImport.update({
   id: '/teachers',
   path: '/teachers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardMaterialsRoute = DashboardMaterialsRouteImport.update({
@@ -94,10 +118,14 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/educators': typeof EducatorsRoute
+  '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/how-it-works': typeof HowItWorksRoute
   '/messages': typeof MessagesRoute
+  '/privacy': typeof PrivacyRoute
+  '/support': typeof SupportRoute
   '/teachers': typeof TeachersRoute
+  '/terms': typeof TermsRoute
   '/dashboard/materials': typeof DashboardMaterialsRoute
   '/dashboard/student': typeof DashboardStudentRoute
   '/dashboard/teacher': typeof DashboardTeacherRoute
@@ -109,10 +137,14 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/educators': typeof EducatorsRoute
+  '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/how-it-works': typeof HowItWorksRoute
   '/messages': typeof MessagesRoute
+  '/privacy': typeof PrivacyRoute
+  '/support': typeof SupportRoute
   '/teachers': typeof TeachersRoute
+  '/terms': typeof TermsRoute
   '/dashboard/materials': typeof DashboardMaterialsRoute
   '/dashboard/student': typeof DashboardStudentRoute
   '/dashboard/teacher': typeof DashboardTeacherRoute
@@ -125,10 +157,14 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/educators': typeof EducatorsRoute
+  '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/how-it-works': typeof HowItWorksRoute
   '/messages': typeof MessagesRoute
+  '/privacy': typeof PrivacyRoute
+  '/support': typeof SupportRoute
   '/teachers': typeof TeachersRoute
+  '/terms': typeof TermsRoute
   '/dashboard/materials': typeof DashboardMaterialsRoute
   '/dashboard/student': typeof DashboardStudentRoute
   '/dashboard/teacher': typeof DashboardTeacherRoute
@@ -142,10 +178,14 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/educators'
+    | '/feedback'
     | '/forgot-password'
     | '/how-it-works'
     | '/messages'
+    | '/privacy'
+    | '/support'
     | '/teachers'
+    | '/terms'
     | '/dashboard/materials'
     | '/dashboard/student'
     | '/dashboard/teacher'
@@ -157,10 +197,14 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/educators'
+    | '/feedback'
     | '/forgot-password'
     | '/how-it-works'
     | '/messages'
+    | '/privacy'
+    | '/support'
     | '/teachers'
+    | '/terms'
     | '/dashboard/materials'
     | '/dashboard/student'
     | '/dashboard/teacher'
@@ -172,10 +216,14 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/educators'
+    | '/feedback'
     | '/forgot-password'
     | '/how-it-works'
     | '/messages'
+    | '/privacy'
+    | '/support'
     | '/teachers'
+    | '/terms'
     | '/dashboard/materials'
     | '/dashboard/student'
     | '/dashboard/teacher'
@@ -188,10 +236,14 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
   EducatorsRoute: typeof EducatorsRoute
+  FeedbackRoute: typeof FeedbackRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HowItWorksRoute: typeof HowItWorksRoute
   MessagesRoute: typeof MessagesRoute
+  PrivacyRoute: typeof PrivacyRoute
+  SupportRoute: typeof SupportRoute
   TeachersRoute: typeof TeachersRoute
+  TermsRoute: typeof TermsRoute
   DashboardMaterialsRoute: typeof DashboardMaterialsRoute
   DashboardStudentRoute: typeof DashboardStudentRoute
   DashboardTeacherRoute: typeof DashboardTeacherRoute
@@ -229,6 +281,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EducatorsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/feedback': {
+      id: '/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/forgot-password': {
       id: '/forgot-password'
       path: '/forgot-password'
@@ -250,11 +309,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MessagesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/teachers': {
       id: '/teachers'
       path: '/teachers'
       fullPath: '/teachers'
       preLoaderRoute: typeof TeachersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/materials': {
@@ -300,10 +380,14 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
   EducatorsRoute: EducatorsRoute,
+  FeedbackRoute: FeedbackRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   HowItWorksRoute: HowItWorksRoute,
   MessagesRoute: MessagesRoute,
+  PrivacyRoute: PrivacyRoute,
+  SupportRoute: SupportRoute,
   TeachersRoute: TeachersRoute,
+  TermsRoute: TermsRoute,
   DashboardMaterialsRoute: DashboardMaterialsRoute,
   DashboardStudentRoute: DashboardStudentRoute,
   DashboardTeacherRoute: DashboardTeacherRoute,

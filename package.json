@@ -4,7 +4,7 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "concurrently \"vite dev\" \"npm run dev --prefix backend\"",
     "build": "vite build && cd backend && npm run build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
@@ -77,6 +77,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^8.2.2",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",

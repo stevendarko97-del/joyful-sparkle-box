@@ -387,35 +387,35 @@ export type Database = {
         Row: {
           amount_cents: number
           booking_id: string | null
+          student_id: string | null
           created_at: string
           currency: string
           id: string
           status: Database["public"]["Enums"]["transaction_status"]
-          stripe_payment_intent: string | null
-          stripe_session_id: string | null
-          user_id: string
+          paystack_reference: string | null
+          transaction_date: string
         }
         Insert: {
           amount_cents: number
           booking_id?: string | null
+          student_id?: string | null
           created_at?: string
           currency?: string
           id?: string
           status?: Database["public"]["Enums"]["transaction_status"]
-          stripe_payment_intent?: string | null
-          stripe_session_id?: string | null
-          user_id: string
+          paystack_reference?: string | null
+          transaction_date?: string
         }
         Update: {
           amount_cents?: number
           booking_id?: string | null
+          student_id?: string | null
           created_at?: string
           currency?: string
           id?: string
           status?: Database["public"]["Enums"]["transaction_status"]
-          stripe_payment_intent?: string | null
-          stripe_session_id?: string | null
-          user_id?: string
+          paystack_reference?: string | null
+          transaction_date?: string
         }
         Relationships: [
           {

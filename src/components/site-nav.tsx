@@ -1,7 +1,17 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Bell, X, CalendarCheck, GraduationCap, MessageSquare, LogOut, LayoutDashboard, User } from "lucide-react";
+import { ChevronDown, Bell, X, CalendarCheck, GraduationCap, MessageSquare, LogOut, LayoutDashboard, User, CreditCard, AlertCircle, CheckCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect, useRef } from "react";
+
+type Notification = {
+  id: string;
+  title: string;
+  message: string;
+  type?: 'payment' | 'message' | 'support' | 'booking' | 'general';
+  link?: string | null;
+  is_read?: boolean;
+  created_at: string;
+};
 
 export function SiteNav() {
   const { isAuthed, isAdmin, isTeacher, signOut, user } = useAuth();
@@ -10,13 +20,12 @@ export function SiteNav() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [notifications, setNotifications] = useState<{ id: string; title: string; message: string; created_at: string }[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const moreRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Load notifications for logged-in users
-  useEffect(() => {
+  const fetchNotifications = () => {
     if (!isAuthed || !user) return;
     const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
     const token = localStorage.getItem("token");
@@ -27,7 +36,42 @@ export function SiteNav() {
       .then(r => r.ok ? r.json() : { notifications: [] })
       .then(d => setNotifications(d.notifications ?? []))
       .catch(() => {});
+  };
+
+  // Load notifications and poll every 6 seconds
+  useEffect(() => {
+    fetchNotifications();
+    if (!isAuthed) return;
+    const interval = setInterval(fetchNotifications, 6000);
+    return () => clearInterval(interval);
   }, [isAuthed, user]);
+
+  const markAllRead = async () => {
+    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    await fetch(`${backendUrl}/api/notifications/read-all`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+  };
+
+  const handleNotificationClick = async (n: Notification) => {
+    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+    const token = localStorage.getItem("token");
+    if (token && !n.is_read) {
+      await fetch(`${backendUrl}/api/notifications/${n.id}/read`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, is_read: true } : item));
+    }
+    setNotifOpen(false);
+    if (n.link) {
+      navigate({ to: n.link as any });
+    }
+  };
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -39,6 +83,8 @@ export function SiteNav() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-surface/90 backdrop-blur-md">
@@ -89,6 +135,14 @@ export function SiteNav() {
             </Link>
           )}
 
+          <Link
+            to="/support"
+            className="text-muted-foreground transition-colors hover:text-brand"
+            activeProps={{ className: "text-brand font-semibold" }}
+          >
+            Support &amp; Feedback
+          </Link>
+
           {isAdmin && (
             <Link
               to="/admin"
@@ -112,32 +166,80 @@ export function SiteNav() {
                   aria-label="Notifications"
                 >
                   <Bell className="size-4 text-ink" />
-                  {notifications.length > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand text-[9px] font-bold text-primary-foreground">
-                      {notifications.length > 9 ? "9+" : notifications.length}
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white animate-pulse">
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}
                 </button>
 
                 {notifOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-border bg-card shadow-2xl z-50 overflow-hidden fade-in">
+                  <div className="absolute right-0 top-full mt-2 w-88 rounded-2xl border border-border bg-card shadow-2xl z-50 overflow-hidden fade-in">
                     <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-secondary/50">
-                      <p className="text-sm font-semibold">Notifications</p>
-                      <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground">
-                        <X className="size-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold">Notifications</p>
+                        {unreadCount > 0 && (
+                          <span className="rounded-full bg-brand/15 text-brand px-2 py-0.5 text-[10px] font-bold">
+                            {unreadCount} new
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={markAllRead}
+                            className="text-[11px] font-medium text-brand hover:underline flex items-center gap-1"
+                          >
+                            <CheckCheck className="size-3" />
+                            Mark read
+                          </button>
+                        )}
+                        <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground">
+                          <X className="size-4" />
+                        </button>
+                      </div>
                     </div>
                     <div className="max-h-80 overflow-y-auto divide-y divide-border">
                       {notifications.length === 0 ? (
-                        <p className="px-4 py-6 text-center text-sm text-muted-foreground">No new notifications</p>
+                        <p className="px-4 py-8 text-center text-xs text-muted-foreground">No new notifications</p>
                       ) : (
-                        notifications.map(n => (
-                          <div key={n.id} className="p-3 hover:bg-secondary/40 transition-colors">
-                            <p className="text-sm font-medium text-ink">{n.title}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">{n.message}</p>
-                            <p className="mt-1 text-[10px] text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</p>
-                          </div>
-                        ))
+                        notifications.map(n => {
+                          const Icon = n.type === 'payment' ? CreditCard :
+                                       n.type === 'message' ? MessageSquare :
+                                       n.type === 'support' ? AlertCircle : CalendarCheck;
+                          const iconBg = n.type === 'payment' ? 'bg-emerald-100 text-emerald-700' :
+                                         n.type === 'message' ? 'bg-blue-100 text-blue-700' :
+                                         n.type === 'support' ? 'bg-amber-100 text-amber-700' :
+                                         'bg-purple-100 text-purple-700';
+
+                          return (
+                            <div
+                              key={n.id}
+                              onClick={() => handleNotificationClick(n)}
+                              className={`p-3.5 hover:bg-secondary/60 transition-colors cursor-pointer flex items-start gap-3 ${
+                                !n.is_read ? 'bg-brand/5' : ''
+                              }`}
+                            >
+                              <div className={`size-8 rounded-xl shrink-0 flex items-center justify-center ${iconBg}`}>
+                                <Icon className="size-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <p className={`text-xs truncate ${!n.is_read ? 'font-bold text-ink' : 'font-medium text-ink/80'}`}>
+                                    {n.title}
+                                  </p>
+                                  {!n.is_read && <span className="size-2 rounded-full bg-brand shrink-0" />}
+                                </div>
+                                <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                                  {n.message}
+                                </p>
+                                <p className="mt-1 text-[9px] text-muted-foreground/70">
+                                  {new Date(n.created_at).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -263,6 +365,13 @@ export function SiteNav() {
               Messages
             </Link>
           )}
+          <Link
+            to="/support"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 text-sm font-medium text-ink hover:text-brand"
+          >
+            Support &amp; Feedback
+          </Link>
           {isAdmin && (
             <Link
               to="/admin"
@@ -300,8 +409,10 @@ export function SiteFooter() {
           <Link to="/how-it-works" className="hover:text-brand transition-colors">How it Works</Link>
           <Link to="/educators" className="hover:text-brand transition-colors">For Educators</Link>
           <Link to="/teachers" className="hover:text-brand transition-colors">Find a Tutor</Link>
-          <a href="#" className="hover:text-brand transition-colors">Terms of Service</a>
-          <a href="#" className="hover:text-brand transition-colors">Privacy Policy</a>
+          <Link to="/support" className="hover:text-brand transition-colors font-semibold text-brand">Support &amp; Feedback</Link>
+          <Link to="/terms" className="hover:text-brand transition-colors">Terms of Service</Link>
+          <Link to="/terms" className="hover:text-brand transition-colors">Policies &amp; Escrow</Link>
+          <Link to="/privacy" className="hover:text-brand transition-colors">Privacy Policy</Link>
         </div>
       </div>
       <div className="mx-auto max-w-7xl px-6 mt-8 pt-6 border-t border-border/50 text-center text-xs text-muted-foreground">

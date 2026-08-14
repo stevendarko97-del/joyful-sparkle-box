@@ -1,13 +1,21 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CheckCheck } from "lucide-react";
 
+type MessagesSearch = {
+  contactId?: string;
+};
+
 export const Route = createFileRoute("/messages")({
+  validateSearch: (search: Record<string, unknown>): MessagesSearch => {
+    return {
+      contactId: search.contactId as string | undefined,
+    };
+  },
   component: MessagesPage,
 });
 
@@ -17,158 +25,158 @@ type Message = {
   receiver_id: string;
   content: string;
   created_at: string;
-  sender_profile?: { full_name: string; avatar_url: string | null } | null;
+  sender_name?: string;
+  sender_avatar?: string | null;
 };
 
 type Contact = {
   id: string;
   full_name: string;
   avatar_url: string | null;
-  lastMessageAt: string;
+  role?: string;
+  last_message?: string;
+  last_message_at?: string;
 };
+
+const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
 function MessagesPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const [messages, setMessages] = useState<Message[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [remoteTyping, setRemoteTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const channelRef = useRef<any>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth", search: { mode: "login", role: "student" } });
   }, [user, loading, navigate]);
 
-  const loadContacts = async () => {
-    if (!user) return;
-    // For MVP, we fetch unique users we've messaged or who messaged us
-    const { data, error } = await supabase
-      .from("messages")
-      .select("sender_id, receiver_id, created_at, sender_profile:profiles!messages_sender_id_fkey(full_name, avatar_url), receiver_profile:profiles!messages_receiver_id_fkey(full_name, avatar_url)")
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    const uniqueContacts = new Map<string, Contact>();
-    (data || []).forEach((m: any) => {
-      const isSender = m.sender_id === user.id;
-      const contactId = isSender ? m.receiver_id : m.sender_id;
-      const profile = isSender ? m.receiver_profile : m.sender_profile;
-      
-      if (!uniqueContacts.has(contactId) && profile) {
-        uniqueContacts.set(contactId, {
-          id: contactId,
-          full_name: profile.full_name || "Unknown User",
-          avatar_url: profile.avatar_url,
-          lastMessageAt: m.created_at,
-        });
+  const loadContacts = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${BACKEND}/api/messages/contacts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data?.contacts) {
+        setContacts(data.contacts);
       }
-    });
-
-    setContacts(Array.from(uniqueContacts.values()));
-  };
-
-  const loadMessages = async (contactId: string) => {
-    if (!user) return;
-    const { data, error } = await supabase
-      .from("messages")
-      .select("id, sender_id, receiver_id, content, created_at")
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${contactId}),and(sender_id.eq.${contactId},receiver_id.eq.${user.id})`)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      toast.error("Failed to load messages");
-      return;
+    } catch (err) {
+      console.error("Error loading contacts", err);
     }
-    setMessages(data as Message[]);
-    setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }, 100);
-  };
+  }, []);
 
+  const loadMessages = useCallback(async (contactId: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${BACKEND}/api/messages/${contactId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data?.messages) {
+        setMessages(data.messages);
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }, 80);
+      }
+    } catch (err) {
+      console.error("Error loading messages", err);
+    }
+  }, []);
+
+  // Initial load contacts
   useEffect(() => {
     if (user) {
       loadContacts();
     }
-  }, [user]);
+  }, [user, loadContacts]);
 
+  // Handle direct navigation via search param ?contactId=...
   useEffect(() => {
-    if (activeContact) {
-      loadMessages(activeContact.id);
-      
-      // Subscribe to real-time updates for this conversation
-      const channelName = [user?.id, activeContact.id].sort().join('_');
-      const channel = supabase
-        .channel(`room_${channelName}`)
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'messages' },
-          (payload) => {
-            const newMsg = payload.new as Message;
-            if (
-              (newMsg.sender_id === user?.id && newMsg.receiver_id === activeContact.id) ||
-              (newMsg.sender_id === activeContact.id && newMsg.receiver_id === user?.id)
-            ) {
-              setMessages((prev) => [...prev, newMsg]);
-              setRemoteTyping(false);
-              setTimeout(() => {
-                if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-              }, 100);
-            }
-          }
-        )
-        .on('broadcast', { event: 'typing' }, (payload) => {
-          if (payload.payload.userId === activeContact.id) {
-             setRemoteTyping(payload.payload.typing);
-             setTimeout(() => {
-                if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-             }, 50);
+    if (!user || !search.contactId) return;
+    const targetId = search.contactId;
+
+    // Check if in existing contacts list
+    const existing = contacts.find((c) => c.id === targetId);
+    if (existing) {
+      setActiveContact(existing);
+    } else {
+      // Fetch contact profile info
+      const token = localStorage.getItem("token");
+      fetch(`${BACKEND}/api/messages/contact-info/${targetId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.contact) {
+            const newContact: Contact = {
+              id: data.contact.id,
+              full_name: data.contact.full_name || "Tutor",
+              avatar_url: data.contact.avatar_url,
+              role: data.contact.role,
+            };
+            setActiveContact(newContact);
+            setContacts((prev) => (prev.some((c) => c.id === newContact.id) ? prev : [newContact, ...prev]));
           }
         })
-        .subscribe();
-      
-      channelRef.current = channel;
-
-      return () => {
-        supabase.removeChannel(channel);
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      };
+        .catch(console.error);
     }
-  }, [activeContact, user]);
+  }, [user, search.contactId, contacts]);
+
+  // Polling for active conversation
+  useEffect(() => {
+    if (!activeContact) return;
+    loadMessages(activeContact.id);
+
+    const interval = setInterval(() => {
+      loadMessages(activeContact.id);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [activeContact, loadMessages]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !activeContact || !newMessage.trim()) return;
+    if (!user || !activeContact || !newMessage.trim() || sending) return;
 
+    const token = localStorage.getItem("token");
+    const content = newMessage.trim();
     setSending(true);
-    const { error } = await supabase.from("messages").insert({
-      sender_id: user.id,
-      receiver_id: activeContact.id,
-      content: newMessage.trim(),
-    });
-    
-    setSending(false);
-    
-    if (error) {
-      toast.error("Failed to send message");
-    } else {
-      setNewMessage("");
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'typing',
-          payload: { userId: user.id, typing: false },
-        });
+
+    try {
+      const res = await fetch(`${BACKEND}/api/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          receiver_id: activeContact.id,
+          content,
+        }),
+      });
+      const data = await res.json();
+      setSending(false);
+
+      if (res.ok && data?.message) {
+        setNewMessage("");
+        setMessages((prev) => [...prev, data.message]);
+        loadContacts();
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }, 50);
+      } else {
+        toast.error(data?.error || "Failed to send message");
       }
+    } catch (err: any) {
+      setSending(false);
+      toast.error("Failed to send message");
     }
   };
 
@@ -210,9 +218,14 @@ function MessagesPage() {
                     </div>
                     <div className="flex-1 overflow-hidden">
                       <p className="truncate font-semibold">{contact.full_name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {new Date(contact.lastMessageAt).toLocaleDateString()}
-                      </p>
+                      {contact.last_message && (
+                        <p className="truncate text-xs text-muted-foreground">{contact.last_message}</p>
+                      )}
+                      {contact.last_message_at && (
+                        <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                          {new Date(contact.last_message_at).toLocaleDateString()}
+                        </p>
+                      )}
                     </div>
                   </button>
                 ))
@@ -238,13 +251,22 @@ function MessagesPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold">{activeContact.full_name}</h3>
-                      <Link to="/teacher/$id" params={{ id: activeContact.id }} className="text-xs text-brand hover:underline">View Profile</Link>
+                      {activeContact.role === "teacher" && (
+                        <Link to="/teacher/$id" params={{ id: activeContact.id }} className="text-xs text-brand hover:underline">
+                          View Tutor Profile
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Messages List */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-surface/30">
+                  {messages.length === 0 && (
+                    <div className="py-12 text-center text-sm text-muted-foreground">
+                      No messages in this chat yet. Say hello! 👋
+                    </div>
+                  )}
                   {messages.map((msg, index) => {
                     const isMe = msg.sender_id === user?.id;
                     const prevMsg = index > 0 ? messages[index - 1] : null;
@@ -252,7 +274,7 @@ function MessagesPage() {
                       (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() < 60000);
                     
                     return (
-                      <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} ${isConsecutive ? "mt-1" : "mt-4"}`}>
+                      <div key={msg.id || index} className={`flex ${isMe ? "justify-end" : "justify-start"} ${isConsecutive ? "mt-1" : "mt-4"}`}>
                         <div className={`max-w-[70%] px-4 py-2.5 shadow-sm relative group ${
                           isMe 
                             ? `bg-brand text-primary-foreground ${isConsecutive ? "rounded-2xl rounded-tr-sm" : "rounded-2xl rounded-br-sm"}` 
@@ -269,15 +291,6 @@ function MessagesPage() {
                       </div>
                     );
                   })}
-                  {remoteTyping && (
-                    <div className="flex justify-start mt-4">
-                      <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm flex gap-1 items-center h-10">
-                        <span className="size-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                        <span className="size-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                        <span className="size-1.5 bg-muted-foreground/40 rounded-full animate-bounce"></span>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Input Area */}
@@ -286,29 +299,12 @@ function MessagesPage() {
                     <input
                       type="text"
                       value={newMessage}
-                      onChange={(e) => {
-                        setNewMessage(e.target.value);
-                        if (channelRef.current && user) {
-                          channelRef.current.send({
-                            type: 'broadcast',
-                            event: 'typing',
-                            payload: { userId: user.id, typing: e.target.value.length > 0 },
-                          });
-                          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                          typingTimeoutRef.current = setTimeout(() => {
-                            channelRef.current?.send({
-                              type: 'broadcast',
-                              event: 'typing',
-                              payload: { userId: user.id, typing: false },
-                            });
-                          }, 3000);
-                        }
-                      }}
+                      onChange={(e) => setNewMessage(e.target.value)}
                       placeholder="Type a message..."
                       className="flex-1 rounded-full border border-border bg-surface px-6 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand"
                     />
                     <Button type="submit" disabled={!newMessage.trim() || sending} className="rounded-full bg-brand px-8 font-semibold">
-                      Send
+                      {sending ? "Sending..." : "Send"}
                     </Button>
                   </form>
                 </div>

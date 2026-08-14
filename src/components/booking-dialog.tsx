@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, Link } from "@tanstack/react-router";
 
 const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
 
@@ -23,7 +23,25 @@ function ymd(d: Date) {
 }
 
 /* ── Paystack inline popup helper ── */
-function openPaystackPopup({
+function loadPaystackScript(): Promise<void> {
+  if ((window as any).PaystackPop) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Failed to load Paystack script')));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Paystack script'));
+    document.body.appendChild(script);
+  });
+}
+
+async function openPaystackPopup({
   email,
   amountCents,
   reference,
@@ -36,23 +54,34 @@ function openPaystackPopup({
   onSuccess: () => void;
   onClose: () => void;
 }) {
-  const publicKey = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY as string;
-  if (!publicKey || publicKey === "pk_test_placeholder") {
+  const envKey = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY as string;
+  const publicKey = (envKey && envKey !== "pk_test_placeholder") 
+    ? envKey 
+    : "pk_test_d923dcac32522f2aa54f4f5ceb9efd3d7f4be793";
+
+  if (!publicKey) {
     // Dev mode — skip payment and mark success
     toast.info("Paystack key not set — simulating payment success (dev mode)");
     onSuccess();
     return;
   }
-  const handler = (window as any).PaystackPop?.setup({
-    key: publicKey,
-    email,
-    amount: amountCents,
-    currency: "GHS",
-    ref: reference,
-    callback: () => { onSuccess(); },
-    onClose,
-  });
-  handler?.openIframe();
+  try {
+    await loadPaystackScript();
+    const handler = (window as any).PaystackPop?.setup({
+      key: publicKey,
+      email,
+      amount: amountCents,
+      currency: "GHS",
+      ref: reference,
+      callback: () => { onSuccess(); },
+      onClose,
+    });
+    handler?.openIframe();
+  } catch (err: any) {
+    console.error("Paystack load error:", err);
+    toast.error("Could not load Paystack checkout. Please try again.");
+    onClose();
+  }
 }
 
 export function BookingDialog({ open, onClose, teacher }: Props) {
@@ -288,6 +317,9 @@ export function BookingDialog({ open, onClose, teacher }: Props) {
                 Pay Later from Dashboard
               </button>
             </div>
+            <p className="mt-4 text-center text-[10px] text-muted-foreground leading-relaxed">
+              🛡️ Protected by <Link to="/terms" onClick={onClose} className="text-brand font-semibold hover:underline">QuickTutor Escrow</Link>. Funds are held safely until your lesson is completed.
+            </p>
           </div>
         )}
 

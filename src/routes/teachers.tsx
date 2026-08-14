@@ -114,7 +114,13 @@ function TeachersPage() {
   };
 
   const filtered = useMemo(() => teachers.filter(t => {
-    const matchSearch = !search || t.profiles?.full_name.toLowerCase().includes(search.toLowerCase()) || t.headline?.toLowerCase().includes(search.toLowerCase());
+    const s = search.toLowerCase().replace(/maths?/g, 'math');
+    const subj = t.subjects?.name?.toLowerCase().replace(/maths?/g, 'math') || "";
+    const matchSearch = !search || 
+      t.profiles?.full_name?.toLowerCase().includes(s) || 
+      t.headline?.toLowerCase().includes(s) ||
+      subj.includes(s) ||
+      t.exam_types?.some(e => e.toLowerCase().includes(s));
     const matchStars = minStars === 0 || (t.avg_stars ?? 0) >= minStars;
     const matchYears = (t.years_experience ?? 0) >= minYears;
     const matchFav = !favOnly || favIds.has(t.user_id);

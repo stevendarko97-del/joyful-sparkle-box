@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Calendar, Clock, CreditCard, CheckCircle2 } from "lucide-react";
+import { Calendar, Clock, CreditCard, CheckCircle2, MessageSquare, AlertCircle } from "lucide-react";
+import { ReportDialog } from "@/components/report-dialog";
 export const Route = createFileRoute("/dashboard/student")({ component: StudentDashboard });
 
 type Booking = {
@@ -24,14 +25,43 @@ function formatDateTime(v: string) {
   });
 }
 
-function openPaystackPopup(email: string, amountCents: number, reference: string, onSuccess: () => void, onClose: () => void) {
-  const publicKey = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY as string;
-  if (!publicKey || publicKey === "pk_test_placeholder") {
+function loadPaystackScript(): Promise<void> {
+  if ((window as any).PaystackPop) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="https://js.paystack.co/v1/inline.js"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Failed to load Paystack script')));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v1/inline.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Paystack script'));
+    document.body.appendChild(script);
+  });
+}
+
+async function openPaystackPopup(email: string, amountCents: number, reference: string, onSuccess: () => void, onClose: () => void) {
+  const envKey = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY as string;
+  const publicKey = (envKey && envKey !== "pk_test_placeholder") 
+    ? envKey 
+    : "pk_test_d923dcac32522f2aa54f4f5ceb9efd3d7f4be793";
+
+  if (!publicKey) {
     toast.info("Paystack key not set — simulating payment (dev mode)");
     onSuccess(); return;
   }
-  const handler = (window as any).PaystackPop?.setup({ key: publicKey, email, amount: amountCents, currency: "GHS", ref: reference, callback: onSuccess, onClose });
-  handler?.openIframe();
+  try {
+    await loadPaystackScript();
+    const handler = (window as any).PaystackPop?.setup({ key: publicKey, email, amount: amountCents, currency: "GHS", ref: reference, callback: onSuccess, onClose });
+    handler?.openIframe();
+  } catch (err: any) {
+    console.error("Paystack load error:", err);
+    toast.error("Could not load Paystack popup. Please try again.");
+    onClose();
+  }
 }
 
 function StudentDashboard() {
@@ -52,6 +82,14 @@ function StudentDashboard() {
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
   const [newDate, setNewDate] = useState("");
 
+  // Report modal
+  const [reportModal, setReportModal] = useState<{ open: boolean; bookingId: string | null; label: string | null }>({
+    open: false,
+    bookingId: null,
+    label: null,
+  });
+  const [myTickets, setMyTickets] = useState<any[]>([]);
+
   useEffect(() => { if (!loading && !user) navigate({ to: "/auth" }); }, [user, loading, navigate]);
 
   const loadDashboard = async () => {
@@ -65,7 +103,20 @@ function StudentDashboard() {
       setBookings(data.bookings ?? []);
       setRatedIds(new Set(data.ratedIds ?? []));
     }
+    loadMyTickets();
     setLoadingData(false);
+  };
+
+  const loadMyTickets = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const res = await fetch(`${BACKEND}/api/support/my-tickets`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setMyTickets(data.tickets ?? []);
+    }
   };
 
   useEffect(() => { if (user) loadDashboard(); }, [user]);
@@ -77,6 +128,21 @@ function StudentDashboard() {
     });
     if (res.ok) { toast.success("Booking cancelled"); loadDashboard(); }
     else toast.error("Failed to cancel");
+  };
+
+  const markCompleted = async (id: string) => {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${BACKEND}/api/teacher/bookings/${id}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: "completed" }),
+    });
+    if (res.ok) {
+      toast.success("Lesson marked as completed! You can now leave a review.");
+      loadDashboard();
+    } else {
+      toast.error("Failed to update status");
+    }
   };
 
   const reschedule = async () => {
@@ -145,9 +211,18 @@ function StudentDashboard() {
       <SiteNav />
       <div className="mx-auto max-w-7xl px-6 py-10">
         {/* Header */}
-        <div className="mb-8">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand">Student Dashboard</p>
-          <h1 className="mt-1 font-serif text-4xl">My Learning</h1>
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand">Student Dashboard</p>
+            <h1 className="mt-1 font-serif text-4xl">My Learning</h1>
+          </div>
+          <button
+            onClick={() => setReportModal({ open: true, bookingId: null, label: null })}
+            className="h-10 rounded-full border border-border bg-card px-4 text-xs font-semibold text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5 transition-colors flex items-center gap-2"
+          >
+            <AlertCircle className="size-4 text-destructive" />
+            Report a Problem / Support
+          </button>
         </div>
 
         {/* Stats */}
@@ -240,11 +315,14 @@ function StudentDashboard() {
                         Pay Now
                       </button>
                     )}
-                    {b.status === "confirmed" && new Date(b.scheduled_at) > now && (
+                    {b.status === "confirmed" && (
                       <>
                         <Link to="/room/$id" params={{ id: b.id }} className="h-8 rounded-full bg-ink px-3 text-xs font-medium text-primary-foreground leading-8">
-                          Join
+                          Enter Room
                         </Link>
+                        <button onClick={() => markCompleted(b.id)} className="h-8 rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-3 text-xs font-semibold hover:bg-blue-100 transition-colors">
+                          Mark Completed
+                        </button>
                         <button onClick={() => setRescheduleBooking(b)} className="h-8 rounded-full border border-border px-3 text-xs font-medium hover:bg-secondary">
                           Reschedule
                         </button>
@@ -261,12 +339,100 @@ function StudentDashboard() {
                     {b.status === "completed" && ratedIds.has(b.id) && (
                       <span className="text-xs text-muted-foreground">✓ Reviewed</span>
                     )}
+
+                    <Link
+                      to="/messages"
+                      search={{ contactId: b.teacher_id }}
+                      className="h-8 rounded-full border border-border px-3 text-xs font-medium hover:bg-secondary flex items-center gap-1.5 transition-colors"
+                    >
+                      <MessageSquare className="size-3 text-brand" />
+                      Message
+                    </Link>
+
+                    <button
+                      onClick={() => setReportModal({
+                        open: true,
+                        bookingId: b.id,
+                        label: `${b.profiles?.full_name ?? "Tutor"} · ${formatDateTime(b.scheduled_at)}`,
+                      })}
+                      className="h-8 rounded-full border border-border px-2.5 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5 transition-colors flex items-center gap-1"
+                      title="Report a problem with this lesson"
+                    >
+                      <AlertCircle className="size-3 text-destructive" />
+                      Report
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* Support Tickets & Admin Responses */}
+        {myTickets.length > 0 && (
+          <div className="mt-10 rounded-3xl bg-card border border-border p-6 sm:p-8 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center">
+                  <AlertCircle className="size-4" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-xl font-bold text-ink">My Support Reports &amp; Admin Responses</h3>
+                  <p className="text-xs text-muted-foreground">Review your submitted dispute tickets and official admin resolutions.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReportModal({ open: true, bookingId: null, label: null })}
+                className="h-8 rounded-full border border-border px-3 text-xs font-semibold hover:bg-secondary transition-colors"
+              >
+                + New Report
+              </button>
+            </div>
+
+            <div className="divide-y divide-border">
+              {myTickets.map((t) => (
+                <div key={t.id} className="py-4 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        {t.category.replace(/_/g, " ")}
+                      </span>
+                      <h4 className="font-semibold text-sm text-ink">{t.subject}</h4>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        t.status === 'open' ? 'bg-red-100 text-red-700' :
+                        t.status === 'in_progress' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {t.status.replace('_', ' ')}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground bg-surface/50 p-3 rounded-xl border border-border/60">
+                    <strong className="text-ink">Your Report:</strong> {t.description}
+                  </p>
+
+                  {t.resolution_notes ? (
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900 space-y-1">
+                      <p className="font-bold flex items-center gap-1.5 text-emerald-800">
+                        <span>🛡️ Admin Resolution &amp; Response:</span>
+                        {t.resolved_at && <span className="font-normal text-[10px] text-emerald-700">({new Date(t.resolved_at).toLocaleDateString()})</span>}
+                      </p>
+                      <p className="text-emerald-800 font-medium pl-5">{t.resolution_notes}</p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-amber-700 italic pl-1 flex items-center gap-1">
+                      <span>⏳ Status:</span> Admin is currently investigating your ticket. You will receive an alert once resolved.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Browse CTA */}
         <div className="mt-6 rounded-2xl bg-secondary p-6 text-center">
@@ -276,6 +442,17 @@ function StudentDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Report Modal */}
+      <ReportDialog
+        open={reportModal.open}
+        onClose={() => {
+          setReportModal({ open: false, bookingId: null, label: null });
+          loadMyTickets();
+        }}
+        bookingId={reportModal.bookingId}
+        bookingLabel={reportModal.label}
+      />
 
       {/* Review modal */}
       {reviewBooking && (

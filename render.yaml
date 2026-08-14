@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: joyful-sparkle-box
+    name: quicktutor-ghana
     env: node
     buildCommand: npm install && npm install --prefix backend && npm run build
     startCommand: npm run start
@@ -13,11 +13,10 @@ services:
         generateValue: true
       - key: PAYSTACK_SECRET_KEY
         sync: false
-      - key: VITE_BACKEND_URL
-        sync: false
       - key: VITE_PAYSTACK_PUBLIC_KEY
         sync: false
-      - key: VITE_SUPABASE_URL
+      - key: ARKESEL_API_KEY
         sync: false
-      - key: VITE_SUPABASE_ANON_KEY
+      - key: VITE_BACKEND_URL
         sync: false
+
