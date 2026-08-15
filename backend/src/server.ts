@@ -869,6 +869,21 @@ app.get('/api/subjects', async (_req: Request, res: Response): Promise<any> => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/topics', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { subjectId } = req.query;
+    let query = 'SELECT id, name, subject_id FROM topics';
+    const params: any[] = [];
+    if (subjectId) {
+      query += ' WHERE subject_id = $1';
+      params.push(subjectId);
+    }
+    query += ' ORDER BY name';
+    const { rows } = await pool.query(query, params);
+    res.json({ topics: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/teachers', async (req: Request, res: Response): Promise<any> => {
   try {
     const { subjectId, examType, location, maxPrice } = req.query;
@@ -889,7 +904,17 @@ app.get('/api/teachers', async (req: Request, res: Response): Promise<any> => {
     const { rows: teachers } = await pool.query(query, params);
     if (teachers.length > 0) {
       const ids = teachers.map(t => t.user_id);
-      const { rows: ratings } = await pool.query('SELECT teacher_id, stars FROM ratings WHERE teacher_id = ANY($1::uuid[])', [ids]);
+      const [{ rows: ratings }, { rows: topicsRows }] = await Promise.all([
+        pool.query('SELECT teacher_id, stars FROM ratings WHERE teacher_id = ANY($1::uuid[])', [ids]),
+        pool.query(`
+          SELECT tt.teacher_id, tt.is_specialty, tp.id as topic_id, tp.name as topic_name 
+          FROM teacher_topics tt 
+          JOIN topics tp ON tt.topic_id = tp.id 
+          WHERE tt.teacher_id = ANY($1::uuid[])
+          ORDER BY tt.is_specialty DESC, tp.name ASC
+        `, [ids])
+      ]);
+
       const agg = new Map<string, { sum: number; n: number }>();
       ratings.forEach(r => { 
         const a = agg.get(r.teacher_id) || { sum: 0, n: 0 }; 
@@ -897,12 +922,21 @@ app.get('/api/teachers', async (req: Request, res: Response): Promise<any> => {
         a.n++; 
         agg.set(r.teacher_id, a); 
       });
+
+      const topicsMap = new Map<string, Array<{ id: string; name: string; is_specialty: boolean }>>();
+      topicsRows.forEach(row => {
+        const list = topicsMap.get(row.teacher_id) || [];
+        list.push({ id: row.topic_id, name: row.topic_name, is_specialty: row.is_specialty });
+        topicsMap.set(row.teacher_id, list);
+      });
+
       teachers.forEach(t => {
         const a = agg.get(t.user_id);
         t.avg_stars = a && a.n > 0 ? Number((a.sum / a.n).toFixed(1)) : null;
         t.review_count = a?.n ?? 0;
         t.profiles = { full_name: t.full_name, avatar_url: t.avatar_url };
         t.subjects = { name: t.subject_name };
+        t.topics = topicsMap.get(t.user_id) || [];
       });
     }
     res.json({ teachers });

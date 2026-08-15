@@ -27,6 +27,8 @@ const GH_REGIONS = [
   "Western North", "Oti", "Savannah", "North East", "Online",
 ];
 
+type Topic = { id: string; name: string; subject_id?: string; is_specialty?: boolean };
+
 type Teacher = {
   user_id: string;
   headline: string;
@@ -37,6 +39,7 @@ type Teacher = {
   years_experience: number | null;
   profiles: { full_name: string; avatar_url: string | null } | null;
   subjects: { name: string } | null;
+  topics?: Topic[];
   avg_stars?: number;
   review_count?: number;
 };
@@ -49,8 +52,10 @@ function TeachersPage() {
   const { q } = Route.useSearch();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [subjects, setSubjects] = useState<{ id: string; name: string }[]>([]);
+  const [allTopics, setAllTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
+  const [activeTopic, setActiveTopic] = useState<string | null>(null);
   const [activeExam, setActiveExam] = useState<ExamType | null>(null);
   const [activeLocation, setActiveLocation] = useState("");
   const [maxPrice, setMaxPrice] = useState(200);
@@ -63,11 +68,16 @@ function TeachersPage() {
   const [favIds, setFavIds] = useState<Set<string>>(new Set());
   const [favOnly, setFavOnly] = useState(false);
 
-  // Load subjects
+  // Load subjects & topics
   useEffect(() => {
     fetch(`${BACKEND}/api/subjects`)
       .then(r => r.json())
       .then(d => setSubjects(d.subjects ?? []))
+      .catch(() => {});
+
+    fetch(`${BACKEND}/api/topics`)
+      .then(r => r.json())
+      .then(d => setAllTopics(d.topics ?? []))
       .catch(() => {});
   }, []);
 
@@ -113,6 +123,12 @@ function TeachersPage() {
     } catch { /* revert */ setFavIds(favIds); }
   };
 
+  // Available topics for active subject or top topics
+  const relevantTopics = useMemo(() => {
+    if (!activeSubject) return allTopics;
+    return allTopics.filter(top => top.subject_id === activeSubject);
+  }, [allTopics, activeSubject]);
+
   const filtered = useMemo(() => teachers.filter(t => {
     const s = search.toLowerCase().replace(/maths?/g, 'math');
     const subj = t.subjects?.name?.toLowerCase().replace(/maths?/g, 'math') || "";
@@ -120,12 +136,15 @@ function TeachersPage() {
       t.profiles?.full_name?.toLowerCase().includes(s) || 
       t.headline?.toLowerCase().includes(s) ||
       subj.includes(s) ||
-      t.exam_types?.some(e => e.toLowerCase().includes(s));
+      t.exam_types?.some(e => e.toLowerCase().includes(s)) ||
+      t.topics?.some(top => top.name.toLowerCase().includes(s));
+
+    const matchTopic = !activeTopic || t.topics?.some(top => top.id === activeTopic || top.name.toLowerCase() === activeTopic.toLowerCase());
     const matchStars = minStars === 0 || (t.avg_stars ?? 0) >= minStars;
     const matchYears = (t.years_experience ?? 0) >= minYears;
     const matchFav = !favOnly || favIds.has(t.user_id);
-    return matchSearch && matchStars && matchYears && matchFav;
-  }), [teachers, search, minStars, minYears, favOnly, favIds]);
+    return matchSearch && matchTopic && matchStars && matchYears && matchFav;
+  }), [teachers, search, activeTopic, minStars, minYears, favOnly, favIds]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -143,12 +162,12 @@ function TeachersPage() {
   const currentPage = Math.min(page, totalPages);
   const paged = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  useEffect(() => { setPage(1); }, [activeSubject, activeExam, activeLocation, maxPrice, search, sortBy, minStars, minYears, favOnly]);
+  useEffect(() => { setPage(1); }, [activeSubject, activeTopic, activeExam, activeLocation, maxPrice, search, sortBy, minStars, minYears, favOnly]);
 
-  const hasFilters = activeSubject || activeExam || activeLocation || maxPrice < 200 || search || minStars > 0 || minYears > 0 || favOnly;
+  const hasFilters = activeSubject || activeTopic || activeExam || activeLocation || maxPrice < 200 || search || minStars > 0 || minYears > 0 || favOnly;
 
   const clearAll = () => {
-    setActiveSubject(null); setActiveExam(null); setActiveLocation(""); setMaxPrice(200);
+    setActiveSubject(null); setActiveTopic(null); setActiveExam(null); setActiveLocation(""); setMaxPrice(200);
     setSearch(""); setMinStars(0); setMinYears(0); setFavOnly(false);
   };
 
@@ -259,15 +278,15 @@ function TeachersPage() {
             <span className="mx-2 h-4 w-px bg-border" />
             <span className="text-xs font-medium text-muted-foreground">Subject:</span>
             <button
-              onClick={() => setActiveSubject(null)}
+              onClick={() => { setActiveSubject(null); setActiveTopic(null); }}
               className={`h-8 rounded-full px-3 text-xs font-medium transition-colors ${activeSubject === null ? "bg-ink text-primary-foreground" : "border border-border bg-surface hover:bg-secondary"}`}
             >
-              All
+              All Subjects
             </button>
             {subjects.map(s => (
               <button
                 key={s.id}
-                onClick={() => setActiveSubject(s.id)}
+                onClick={() => { setActiveSubject(s.id); setActiveTopic(null); }}
                 className={`h-8 rounded-full px-3 text-xs font-medium transition-colors ${activeSubject === s.id ? "bg-ink text-primary-foreground" : "border border-border bg-surface hover:bg-secondary"}`}
               >
                 {s.name}
@@ -279,6 +298,28 @@ function TeachersPage() {
               </button>
             )}
           </div>
+
+          {/* Topics sub-filter row */}
+          {relevantTopics.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border/60 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground mr-1">Topics:</span>
+              <button
+                onClick={() => setActiveTopic(null)}
+                className={`h-6 rounded-full px-2.5 text-[11px] font-medium transition-colors ${activeTopic === null ? "bg-brand text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-ink"}`}
+              >
+                All Topics
+              </button>
+              {relevantTopics.slice(0, 15).map(top => (
+                <button
+                  key={top.id}
+                  onClick={() => setActiveTopic(activeTopic === top.id ? null : top.id)}
+                  className={`h-6 rounded-full px-2.5 text-[11px] font-medium transition-colors ${activeTopic === top.id ? "bg-brand text-primary-foreground font-semibold" : "bg-secondary text-muted-foreground hover:text-ink"}`}
+                >
+                  {top.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Teacher grid */}
@@ -352,6 +393,31 @@ function TeachersPage() {
                     ) : (
                       <p className="mt-1 text-xs text-muted-foreground/60">No reviews yet</p>
                     )}
+
+                    {/* Topics Covered & Specialties */}
+                    {t.topics && t.topics.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {t.topics.slice(0, 3).map(top => (
+                          <span
+                            key={top.id}
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                              top.is_specialty
+                                ? "bg-brand/10 text-brand ring-1 ring-brand/20 font-semibold"
+                                : "bg-secondary text-ink/80"
+                            }`}
+                          >
+                            {top.is_specialty && <span className="mr-0.5 text-accent-gold">★</span>}
+                            {top.name}
+                          </span>
+                        ))}
+                        {t.topics.length > 3 && (
+                          <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                            +{t.topics.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {t.exam_types?.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {t.exam_types.map(e => (
