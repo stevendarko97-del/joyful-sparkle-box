@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { pathToFileURL } from 'url';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
@@ -1702,16 +1703,26 @@ const distPath = path.resolve(__dirname, '../../dist');
 app.use(express.static(publicPath));
 app.use(express.static(distPath));
 
-// Lazy-load Nitro SSR bundle if present
-let nitroHandler: any = null;
-const nitroPath = path.resolve(__dirname, '../../.output/server/index.mjs');
-if (fs.existsSync(nitroPath)) {
-  import(`file://${nitroPath}`).then(m => {
-    nitroHandler = m.default || m;
-    console.log('✅ Nitro SSR module loaded successfully');
-  }).catch(err => {
-    console.error('Could not load Nitro SSR module:', err);
-  });
+// Lazy-load Nitro SSR bundle with pathToFileURL (cross-platform Linux/Windows)
+let nitroHandlerPromise: Promise<any> | null = null;
+async function getNitroHandler() {
+  if (nitroHandlerPromise) return nitroHandlerPromise;
+  const nitroPath = path.resolve(__dirname, '../../.output/server/index.mjs');
+  if (!fs.existsSync(nitroPath)) return null;
+  
+  nitroHandlerPromise = (async () => {
+    try {
+      const fileUrl = pathToFileURL(nitroPath).href;
+      const m = await import(fileUrl);
+      console.log('✅ Nitro SSR module loaded successfully');
+      return m.default || m;
+    } catch (err) {
+      console.error('Error loading Nitro SSR bundle:', err);
+      nitroHandlerPromise = null;
+      return null;
+    }
+  })();
+  return nitroHandlerPromise;
 }
 
 // Catch-all route: delegate to Nitro SSR renderer
@@ -1720,8 +1731,9 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     return next();
   }
 
-  if (nitroHandler && typeof nitroHandler.fetch === 'function') {
-    try {
+  try {
+    const handler = await getNitroHandler();
+    if (handler && typeof handler.fetch === 'function') {
       const url = `${req.protocol}://${req.get('host') || 'localhost'}${req.originalUrl}`;
       const headers = new Headers();
       for (const [key, val] of Object.entries(req.headers)) {
@@ -1735,7 +1747,7 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
         headers,
       });
       const dummyCtx = { waitUntil() {} };
-      const response = await nitroHandler.fetch(webReq, {}, dummyCtx);
+      const response = await handler.fetch(webReq, {}, dummyCtx);
       if (response) {
         res.status(response.status);
         response.headers.forEach((v: string, k: string) => {
@@ -1744,9 +1756,9 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
         const arrayBuf = await response.arrayBuffer();
         return res.send(Buffer.from(arrayBuf));
       }
-    } catch (ssrErr) {
-      console.error('SSR render error for path', req.path, ssrErr);
     }
+  } catch (ssrErr) {
+    console.error('SSR render error for path', req.path, ssrErr);
   }
 
   // Fallback to static index.html if available
@@ -1759,7 +1771,7 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     return res.sendFile(distIndexPath);
   }
 
-  res.status(404).send('<!DOCTYPE html><html><head><meta http-equiv="refresh" content="3"><title>Loading QuickTutor</title></head><body style="font-family:sans-serif;text-align:center;padding:50px;"><h2>Starting QuickTutor...</h2><p>Please refresh in a moment.</p></body></html>');
+  res.status(404).send('<!DOCTYPE html><html><head><meta http-equiv="refresh" content="2"><title>Loading QuickTutor</title></head><body style="font-family:sans-serif;text-align:center;padding:50px;"><h2>Starting QuickTutor...</h2><p>Loading application resources, please wait a moment...</p></body></html>');
 });
 
 // Start server (using httpServer for Socket.IO)
