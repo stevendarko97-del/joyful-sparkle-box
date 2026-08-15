@@ -1703,7 +1703,8 @@ const distPath = path.resolve(__dirname, '../../dist');
 app.use(express.static(publicPath));
 app.use(express.static(distPath));
 
-// Lazy-load Nitro SSR bundle with pathToFileURL (cross-platform Linux/Windows)
+// Lazy-load Nitro SSR bundle with dynamic import (bypasses TypeScript CommonJS require rewrite)
+const dynamicImport = new Function('specifier', 'return import(specifier)');
 let nitroHandlerPromise: Promise<any> | null = null;
 async function getNitroHandler() {
   if (nitroHandlerPromise) return nitroHandlerPromise;
@@ -1713,7 +1714,7 @@ async function getNitroHandler() {
   nitroHandlerPromise = (async () => {
     try {
       const fileUrl = pathToFileURL(nitroPath).href;
-      const m = await import(fileUrl);
+      const m = await dynamicImport(fileUrl);
       console.log('✅ Nitro SSR module loaded successfully');
       return m.default || m;
     } catch (err) {
