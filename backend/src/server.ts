@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 import { Pool } from 'pg';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
@@ -26,6 +27,26 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 const port = process.env.PORT || 4000;
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_fallback_key';
+
+// ── Rate Limiters for Security & Abuse Prevention ────────────────────────────
+// Rate limiter for authentication attempts (Login, Signup, Password Reset)
+export const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // max 20 attempts per 15 min per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please try again in 15 minutes.' }
+});
+
+// Rate limiter for outbound SMS operations to prevent credit exhaustion
+export const smsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many SMS requests. Please wait a few minutes before trying again.' }
+});
 
 // ── Socket.IO for WebRTC signalling ─────────────────────────────────────────
 const io = new SocketServer(httpServer, {
@@ -33,28 +54,47 @@ const io = new SocketServer(httpServer, {
   path: '/socket.io',
 });
 
-// Simple WebSocket upgrade for /signal path (raw WS for the video room)
-// We use Socket.IO rooms keyed by bookingId
-const rooms = new Map<string, Set<string>>(); // roomId -> Set<socketId>
+// Rooms keyed by bookingId -> Set of socket IDs
+const rooms = new Map<string, Set<string>>();
 
 io.on('connection', async (socket) => {
   const { room: bookingId, token } = socket.handshake.query as Record<string, string>;
   if (!bookingId) { socket.disconnect(); return; }
 
-  // Validate JWT
+  // 1. Validate JWT Token
+  let decoded: any;
   try {
-    jwt.verify(token, JWT_SECRET);
+    decoded = jwt.verify(token, JWT_SECRET);
   } catch {
-    socket.emit('error', { message: 'Invalid token' });
+    socket.emit('error', { message: 'Invalid or expired session token' });
     socket.disconnect();
     return;
   }
 
-  // Validate that the session is paid and confirmed (not pending or unpaid)
+  // 2. Validate booking existence, payment confirmation, AND participant ownership
   try {
-    const { rows: bCheck } = await pool.query('SELECT status FROM bookings WHERE id = $1', [bookingId]);
-    if (!bCheck.length || bCheck[0].status === 'pending') {
+    const { rows: bCheck } = await pool.query(
+      'SELECT status, student_id, teacher_id FROM bookings WHERE id = $1',
+      [bookingId]
+    );
+    if (!bCheck.length) {
+      socket.emit('error', { message: 'Booking not found' });
+      socket.disconnect();
+      return;
+    }
+
+    const booking = bCheck[0];
+    if (booking.status === 'pending') {
       socket.emit('error', { message: 'Payment required before entering live classroom' });
+      socket.disconnect();
+      return;
+    }
+
+    // Strict Anti-IDOR: verify connecting user is either the assigned student, tutor, or admin
+    const userId = decoded.id;
+    const userRole = decoded.role;
+    if (booking.student_id !== userId && booking.teacher_id !== userId && userRole !== 'admin') {
+      socket.emit('error', { message: 'Forbidden: You are not authorized to join this private classroom' });
       socket.disconnect();
       return;
     }
@@ -96,8 +136,6 @@ io.on('connection', async (socket) => {
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
-
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_fallback_key';
 
 // Initialize Database Connection Pool
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -312,7 +350,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 })();
 
 // AUTH: Signup Endpoint
-app.post('/api/auth/signup', async (req: Request, res: Response): Promise<any> => {
+app.post('/api/auth/signup', authLimiter, async (req: Request, res: Response): Promise<any> => {
   try {
     const { email, password, fullName, role,
             phone, location, bio,
@@ -381,7 +419,7 @@ app.post('/api/auth/signup', async (req: Request, res: Response): Promise<any> =
 });
 
 // AUTH: Login Endpoint
-app.post('/api/auth/login', async (req: Request, res: Response): Promise<any> => {
+app.post('/api/auth/login', authLimiter, async (req: Request, res: Response): Promise<any> => {
   try {
     const { email, password } = req.body;
     const userRes = await pool.query('SELECT * FROM local_users WHERE email = $1', [email]);
@@ -400,7 +438,7 @@ app.post('/api/auth/login', async (req: Request, res: Response): Promise<any> =>
 });
 
 // AUTH: Forgot Password
-app.post('/api/auth/forgot-password', async (req: Request, res: Response): Promise<any> => {
+app.post('/api/auth/forgot-password', authLimiter, async (req: Request, res: Response): Promise<any> => {
   try {
     const { email } = req.body;
     const userRes = await pool.query('SELECT * FROM local_users WHERE email = $1', [email]);
@@ -420,7 +458,7 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response): Promi
 });
 
 // AUTH: Reset Password
-app.post('/api/auth/reset-password', async (req: Request, res: Response): Promise<any> => {
+app.post('/api/auth/reset-password', authLimiter, async (req: Request, res: Response): Promise<any> => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ error: 'Missing token or newPassword' });
@@ -1630,7 +1668,7 @@ app.put('/api/admin/tickets/:ticketId/status', requireAuth, requireAdmin, async 
 });
 
 // ── SMS TESTING ENDPOINT ──────────────────────────────────────────────────────
-app.post('/api/admin/sms/test', requireAuth, requireAdmin, async (req: Request, res: Response): Promise<any> => {
+app.post('/api/admin/sms/test', smsLimiter, requireAuth, requireAdmin, async (req: Request, res: Response): Promise<any> => {
   try {
     const { phone, message } = req.body;
     if (!phone || !message) return res.status(400).json({ error: 'Phone and message are required' });
