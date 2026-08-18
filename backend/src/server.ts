@@ -344,6 +344,24 @@ app.get('/api/health', (_req: Request, res: Response) => {
       ADD COLUMN IF NOT EXISTS link TEXT,
       ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT false;
     `);
+
+    // Auto-seed default admin account if not already created
+    const adminEmail = 'admin@quicktutor.com';
+    const { rows: adminRows } = await pool.query('SELECT id FROM local_users WHERE email = $1', [adminEmail]);
+    if (adminRows.length === 0) {
+      const adminPassword = 'adminpassword';
+      const password_hash = await bcrypt.hash(adminPassword, 10);
+      const userRes = await pool.query(
+        'INSERT INTO local_users (email, password_hash) VALUES ($1, $2) RETURNING id',
+        [adminEmail, password_hash]
+      );
+      const adminId = userRes.rows[0].id;
+      await pool.query(
+        "INSERT INTO profiles (id, full_name, role) VALUES ($1, 'System Admin', 'admin') ON CONFLICT (id) DO UPDATE SET role = 'admin'",
+        [adminId]
+      );
+      console.log(`✅ Default admin account created automatically: ${adminEmail}`);
+    }
   } catch (e) {
     console.error("Migration error:", e);
   }
