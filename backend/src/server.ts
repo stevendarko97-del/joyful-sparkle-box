@@ -345,8 +345,8 @@ app.get('/api/health', (_req: Request, res: Response) => {
       ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT false;
     `);
 
-    // Auto-seed default admin account if not already created
-    const adminEmail = 'admin@quicktutor.com';
+    // Auto-seed or promote admin account
+    const adminEmail = 'stevendarko97@gmail.com';
     const { rows: adminRows } = await pool.query('SELECT id FROM local_users WHERE email = $1', [adminEmail]);
     if (adminRows.length === 0) {
       const adminPassword = 'adminpassword';
@@ -357,10 +357,17 @@ app.get('/api/health', (_req: Request, res: Response) => {
       );
       const adminId = userRes.rows[0].id;
       await pool.query(
-        "INSERT INTO profiles (id, full_name, role) VALUES ($1, 'System Admin', 'admin') ON CONFLICT (id) DO UPDATE SET role = 'admin'",
+        "INSERT INTO profiles (id, full_name, role) VALUES ($1, 'Steven Darko (Admin)', 'admin') ON CONFLICT (id) DO UPDATE SET role = 'admin'",
         [adminId]
       );
-      console.log(`✅ Default admin account created automatically: ${adminEmail}`);
+      console.log(`✅ Admin account created automatically: ${adminEmail}`);
+    } else {
+      const adminId = adminRows[0].id;
+      await pool.query(
+        "INSERT INTO profiles (id, full_name, role) VALUES ($1, 'Steven Darko (Admin)', 'admin') ON CONFLICT (id) DO UPDATE SET role = 'admin'",
+        [adminId]
+      );
+      console.log(`✅ Admin role ensured for: ${adminEmail}`);
     }
   } catch (e) {
     console.error("Migration error:", e);

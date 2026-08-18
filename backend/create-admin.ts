@@ -6,7 +6,7 @@ dotenv.config();
 async function run() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const email = 'admin@quicktutor.com';
+    const email = 'stevendarko97@gmail.com';
     const password = 'adminpassword';
     
     // Check if admin exists
