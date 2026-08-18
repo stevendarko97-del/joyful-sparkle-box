@@ -21,6 +21,7 @@ import {
   sendAdminPaymentAlertSms,
   sendLessonPriorReminderSms,
 } from './sms';
+import { sendPasswordResetEmail } from './email';
 
 dotenv.config();
 
@@ -466,15 +467,32 @@ app.post('/api/auth/login', authLimiter, async (req: Request, res: Response): Pr
 app.post('/api/auth/forgot-password', authLimiter, async (req: Request, res: Response): Promise<any> => {
   try {
     const { email } = req.body;
-    const userRes = await pool.query('SELECT * FROM local_users WHERE email = $1', [email]);
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const userRes = await pool.query('SELECT * FROM local_users WHERE email = $1', [email.trim().toLowerCase()]);
     const user = userRes.rows[0];
     if (!user) return res.json({ message: 'If email exists, reset link sent.' });
     
     // Generate a short-lived token
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '15m' });
     
-    // Mock sending email
-    console.log(`\n\n[MOCK EMAIL] Password reset link for ${email}: \nhttp://localhost:5173/forgot-password?token=${token}\n\n`);
+    // Build real absolute link
+    const host = req.get('origin') || `${req.protocol}://${req.get('host')}` || 'https://quicktutor-ghana.onrender.com';
+    const resetLink = `${host}/forgot-password?token=${token}`;
+
+    // 1. Send Email (via Nodemailer if SMTP configured, or logged in console)
+    await sendPasswordResetEmail(user.email, resetLink);
+
+    // 2. If user has a phone number registered in profile, also send SMS notification
+    try {
+      const profileRes = await pool.query('SELECT phone FROM profiles WHERE id = $1', [user.id]);
+      const phone = profileRes.rows[0]?.phone;
+      if (phone) {
+        await sendSms(phone, `QuickTutor Ghana: You requested a password reset. Click this link to set a new password: ${resetLink}`);
+      }
+    } catch (smsErr) {
+      console.warn('[SMS] Could not send password reset SMS:', smsErr);
+    }
     
     res.json({ message: 'If email exists, reset link sent.' });
   } catch (err: any) {
