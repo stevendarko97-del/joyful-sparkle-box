@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getBackendUrl } from "@/lib/config";
 
 export type AppRole = "student" | "teacher" | "admin";
 export type User = { id: string; email: string; role: AppRole };
@@ -27,7 +28,7 @@ export function useAuth() {
         const token = localStorage.getItem('token');
         if (!token) throw new Error("No token");
         
-        const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+        const backendUrl = getBackendUrl();
         const res = await fetch(`${backendUrl}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -54,7 +55,7 @@ export function useAuth() {
   }, []);
 
   const signOut = async () => {
-    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+    const backendUrl = getBackendUrl();
     await fetch(`${backendUrl}/api/auth/logout`, { method: "POST" });
     localStorage.removeItem('token');
     setUser(null);

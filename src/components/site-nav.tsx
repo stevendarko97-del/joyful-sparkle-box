@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Bell, X, CalendarCheck, GraduationCap, MessageSquare, LogOut, LayoutDashboard, User, CreditCard, AlertCircle, CheckCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { getBackendUrl } from "@/lib/config";
 import { useState, useEffect, useRef } from "react";
 
 type Notification = {
@@ -27,7 +28,7 @@ export function SiteNav() {
 
   const fetchNotifications = () => {
     if (!isAuthed || !user) return;
-    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+    const backendUrl = getBackendUrl();
     const token = localStorage.getItem("token");
     if (!token) return;
     fetch(`${backendUrl}/api/notifications`, {
@@ -47,7 +48,7 @@ export function SiteNav() {
   }, [isAuthed, user]);
 
   const markAllRead = async () => {
-    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+    const backendUrl = getBackendUrl();
     const token = localStorage.getItem("token");
     if (!token) return;
     await fetch(`${backendUrl}/api/notifications/read-all`, {
@@ -58,7 +59,7 @@ export function SiteNav() {
   };
 
   const handleNotificationClick = async (n: Notification) => {
-    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+    const backendUrl = getBackendUrl();
     const token = localStorage.getItem("token");
     if (token && !n.is_read) {
       await fetch(`${backendUrl}/api/notifications/${n.id}/read`, {
@@ -249,7 +250,7 @@ export function SiteNav() {
               {/* Dashboard Link */}
               <Link
                 to={isTeacher ? "/dashboard/teacher" : "/dashboard/student"}
-                className="flex items-center gap-2 h-9 rounded-full bg-brand px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-brand/90 transition-all hover:scale-[1.02]"
+                className="hidden md:flex items-center gap-2 h-9 rounded-full bg-brand px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-brand/90 transition-all hover:scale-[1.02]"
               >
                 <LayoutDashboard className="size-3.5" />
                 <span>Dashboard</span>
@@ -307,14 +308,14 @@ export function SiteNav() {
               <Link
                 to="/auth"
                 search={{ mode: "login", role: "student" }}
-                className="h-9 px-4 text-sm font-medium leading-9 text-ink hover:text-brand transition-colors"
+                className="hidden md:block h-9 px-4 text-sm font-medium leading-9 text-ink hover:text-brand transition-colors"
               >
                 Log In
               </Link>
               <Link
                 to="/auth"
                 search={{ mode: "signup", role: "student" }}
-                className="h-9 rounded-full bg-brand px-5 text-xs font-semibold leading-9 text-primary-foreground shadow-sm ring-1 ring-brand hover:bg-brand/90 transition-all hover:scale-[1.02]"
+                className="hidden md:block h-9 rounded-full bg-brand px-5 text-xs font-semibold leading-9 text-primary-foreground shadow-sm ring-1 ring-brand hover:bg-brand/90 transition-all hover:scale-[1.02]"
               >
                 Get Started Free
               </Link>
@@ -381,6 +382,37 @@ export function SiteNav() {
               Admin
             </Link>
           )}
+          <div className="pt-4 mt-2 border-t border-border flex flex-col gap-3">
+            {isAuthed ? (
+              <Link
+                to={isTeacher ? "/dashboard/teacher" : "/dashboard/student"}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-center gap-2 h-10 rounded-full bg-brand px-4 text-sm font-semibold text-primary-foreground shadow-sm"
+              >
+                <LayoutDashboard className="size-4" />
+                <span>Dashboard</span>
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/auth"
+                  search={{ mode: "login", role: "student" }}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-center h-10 rounded-full border border-border bg-card px-4 text-sm font-medium text-ink"
+                >
+                  Log In
+                </Link>
+                <Link
+                  to="/auth"
+                  search={{ mode: "signup", role: "student" }}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-center h-10 rounded-full bg-brand px-4 text-sm font-semibold text-primary-foreground shadow-sm"
+                >
+                  Get Started Free
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       )}
     </header>

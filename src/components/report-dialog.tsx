@@ -3,7 +3,9 @@ import { toast } from "sonner";
 import { AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 
 const CATEGORIES = [
   { value: "tutor_no_show", label: "Tutor No-Show (Tutor did not attend)" },

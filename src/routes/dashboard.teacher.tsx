@@ -50,7 +50,9 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 type Availability = { id?: string; day_of_week: number; start_hour: number; end_hour: number };
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 
 function formatDateTime(v: string) {
   return new Date(v).toLocaleString(undefined, {

@@ -44,7 +44,9 @@ type Teacher = {
   review_count?: number;
 };
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 const PAGE_SIZE = 9;
 
 function TeachersPage() {

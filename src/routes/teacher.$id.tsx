@@ -45,7 +45,9 @@ type TeacherProfile = {
   subjects: { name: string } | null;
 };
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 
 function TeacherDetail() {
   const { id } = Route.useParams();

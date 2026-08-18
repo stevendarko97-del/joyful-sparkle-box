@@ -17,7 +17,9 @@ type Booking = {
   profiles: { full_name: string } | null;
 };
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 
 function formatDateTime(v: string) {
   return new Date(v).toLocaleString(undefined, {

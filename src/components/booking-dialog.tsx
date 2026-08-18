@@ -3,7 +3,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { useNavigate, Link } from "@tanstack/react-router";
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 
 type Props = {
   open: boolean;

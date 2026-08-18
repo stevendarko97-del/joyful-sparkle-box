@@ -19,7 +19,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 
 export const Route = createFileRoute("/support")({
   component: SupportPage,

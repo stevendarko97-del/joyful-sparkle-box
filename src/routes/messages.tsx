@@ -38,7 +38,9 @@ type Contact = {
   last_message_at?: string;
 };
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 
 function MessagesPage() {
   const { user, loading } = useAuth();

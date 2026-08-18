@@ -24,7 +24,9 @@ type Ticket = {
   booking_price_cents: number | null;
 };
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 

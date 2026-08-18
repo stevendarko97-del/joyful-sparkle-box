@@ -15,7 +15,9 @@ export const Route = createFileRoute("/forgot-password")({
   head: () => ({ meta: [{ title: "Reset Password — Quick Tutor" }] }),
 });
 
-const BACKEND = (import.meta as any).env.VITE_BACKEND_URL || "http://localhost:4000";
+import { getBackendUrl } from "@/lib/config";
+
+const BACKEND = getBackendUrl();
 const fieldClass = "mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand";
 
 function ForgotPasswordPage() {
