@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { z } from "zod";
 import { SiteNav } from "@/components/site-nav";
 import { toast } from "sonner";
@@ -37,15 +37,18 @@ const BACKEND = getBackendUrl();
 const fieldClass = "mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand";
 
 function AuthPage() {
-  const { mode: initialMode, role: initialRole } = Route.useSearch();
+  const { mode, role } = Route.useSearch();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"login" | "signup">(initialMode ?? "login");
-  const [role, setRole] = useState<"student" | "teacher">(initialRole ?? "student");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const setMode = (m: "login" | "signup") =>
+    navigate({ search: (prev: any) => ({ ...prev, mode: m }) });
+  const setRole = (r: "student" | "teacher") =>
+    navigate({ search: (prev: any) => ({ ...prev, role: r }) });
 
   // Shared extras
   const [phone, setPhone] = useState("");
@@ -153,12 +156,46 @@ function AuthPage() {
           {mode === "signup" ? "Create your account in seconds." : "Sign in to continue."}
         </p>
 
+        {/* Mode Switcher Tabs (Sign in vs Create Account) */}
+        <div className="mt-6 grid grid-cols-2 gap-1.5 rounded-2xl bg-secondary/80 p-1 border border-border">
+          <button
+            type="button"
+            onClick={() => setMode("login")}
+            className={`flex items-center justify-center py-2.5 text-sm font-semibold rounded-xl transition-all ${
+              mode === "login"
+                ? "bg-card text-brand shadow-sm border border-border"
+                : "text-muted-foreground hover:text-ink"
+            }`}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("signup")}
+            className={`flex items-center justify-center py-2.5 text-sm font-semibold rounded-xl transition-all ${
+              mode === "signup"
+                ? "bg-card text-brand shadow-sm border border-border"
+                : "text-muted-foreground hover:text-ink"
+            }`}
+          >
+            Create account
+          </button>
+        </div>
+
         {mode === "signup" && (
-          <div className="mt-8 grid grid-cols-2 gap-2 rounded-full bg-secondary p-1">
-            <button type="button" onClick={() => setRole("student")} className={`rounded-full py-2 text-sm font-medium transition-colors ${role === "student" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>
+          <div className="mt-4 grid grid-cols-2 gap-2 rounded-full bg-secondary p-1">
+            <button
+              type="button"
+              onClick={() => setRole("student")}
+              className={`rounded-full py-2 text-sm font-medium transition-colors ${role === "student" ? "bg-card shadow-sm text-ink font-semibold" : "text-muted-foreground hover:text-ink"}`}
+            >
               I'm a student
             </button>
-            <button type="button" onClick={() => setRole("teacher")} className={`rounded-full py-2 text-sm font-medium transition-colors ${role === "teacher" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>
+            <button
+              type="button"
+              onClick={() => setRole("teacher")}
+              className={`rounded-full py-2 text-sm font-medium transition-colors ${role === "teacher" ? "bg-card shadow-sm text-ink font-semibold" : "text-muted-foreground hover:text-ink"}`}
+            >
               I'm a teacher
             </button>
           </div>
@@ -320,15 +357,7 @@ function AuthPage() {
             <p className="text-center text-[11px] text-muted-foreground leading-relaxed pt-1">
               By creating an account, you agree to our{" "}
               <Link to="/terms" className="text-brand font-semibold hover:underline">
-                Terms of Service
-              </Link>
-              ,{" "}
-              <Link to="/terms" className="text-brand font-semibold hover:underline">
-                Escrow Policies
-              </Link>
-              , and{" "}
-              <Link to="/terms" className="text-brand font-semibold hover:underline">
-                Privacy Policy
+                Terms &amp; Policies
               </Link>
               .
             </p>
@@ -337,7 +366,11 @@ function AuthPage() {
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {mode === "signup" ? "Already have an account? " : "New to Quick Tutor? "}
-          <button onClick={() => setMode(mode === "signup" ? "login" : "signup")} className="font-medium text-brand hover:underline">
+          <button
+            type="button"
+            onClick={() => setMode(mode === "signup" ? "login" : "signup")}
+            className="font-medium text-brand hover:underline"
+          >
             {mode === "signup" ? "Sign in" : "Create account"}
           </button>
         </p>
