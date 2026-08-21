@@ -27,6 +27,7 @@ import {
   CheckCheck,
   X,
   CalendarCheck,
+  Menu,
 } from "lucide-react";
 import { ReportDialog } from "@/components/report-dialog";
 
@@ -85,6 +86,7 @@ function TeacherDashboard() {
   const [myTickets, setMyTickets] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [reportModal, setReportModal] = useState<{ open: boolean; bookingId: string | null; label: string | null }>({
     open: false,
     bookingId: null,
@@ -299,8 +301,8 @@ function TeacherDashboard() {
 
   return (
     <div className="min-h-screen bg-surface flex">
-      {/* ── Left Sidebar Navigation (Mimicking EduBook reference) ── */}
-      <aside className="w-64 bg-card border-r border-border flex flex-col fixed inset-y-0 left-0 z-30">
+      {/* ── Left Sidebar Navigation (Desktop) ── */}
+      <aside className="hidden lg:flex w-64 bg-card border-r border-border flex-col fixed inset-y-0 left-0 z-30">
         {/* Brand Header */}
         <div className="p-6 border-b border-border flex items-center gap-3">
           <div className="flex size-9 items-center justify-center rounded-xl bg-brand text-primary-foreground shadow-sm">
@@ -390,27 +392,245 @@ function TeacherDashboard() {
         </div>
       </aside>
 
+      {/* ── Mobile Drawer Navigation (Slide-in) ── */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <aside className="relative w-72 max-w-[85vw] bg-card border-r border-border flex flex-col z-50 shadow-2xl animate-in slide-in-from-left duration-200">
+            {/* Mobile Drawer Header */}
+            <div className="p-5 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-brand text-primary-foreground shadow-sm">
+                  <GraduationCap className="size-5" />
+                </div>
+                <div>
+                  <Link to="/" className="font-bold text-base text-ink tracking-tight">Quick Tutor</Link>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-brand">Teacher Portal</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileNavOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground"
+                aria-label="Close menu"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            {/* Mobile Nav Tabs */}
+            <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
+              {NAV_ITEMS.map(item => {
+                const Icon = item.icon;
+                const isActive = tab === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => {
+                      setTab(item.key);
+                      setMobileNavOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? "bg-brand text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-secondary hover:text-ink"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="size-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </div>
+                    {'badge' in item && item.badge !== undefined && (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        isActive ? "bg-white text-brand" : "bg-brand/10 text-brand"
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
+              <div className="my-3 border-t border-border" />
+
+              <Link
+                to="/messages"
+                onClick={() => setMobileNavOpen(false)}
+                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-ink transition-all"
+              >
+                <MessageSquare className="size-4 text-muted-foreground" />
+                <span>Messages</span>
+              </Link>
+
+              <button
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  setReportModal({ open: true, bookingId: null, label: null });
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all text-left"
+              >
+                <AlertCircle className="size-4 text-muted-foreground" />
+                <span>Help & Support</span>
+              </button>
+
+              {user?.id && (
+                <Link
+                  to="/teacher/$id"
+                  params={{ id: user.id }}
+                  onClick={() => setMobileNavOpen(false)}
+                  className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-ink transition-all"
+                >
+                  <ExternalLink className="size-4 text-muted-foreground" />
+                  <span>View Public Profile</span>
+                </Link>
+              )}
+            </nav>
+
+            {/* Mobile Sign out */}
+            <div className="p-4 border-t border-border">
+              <button
+                onClick={async () => {
+                  await signOut();
+                  navigate({ to: "/" });
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+              >
+                <LogOut className="size-4" />
+                Sign Out
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
       {/* ── Main Content Area ── */}
-      <main className="flex-1 ml-64 min-h-screen p-8 max-w-6xl">
+      <main className="flex-1 ml-0 lg:ml-64 min-h-screen p-4 sm:p-6 lg:p-8 max-w-6xl w-full min-w-0">
         {/* Header bar */}
-        <header className="flex items-center justify-between mb-8 pb-4 border-b border-border/80">
-          <div>
-            <h1 className="font-serif text-3xl font-bold text-ink">
-              {tab === "overview" && "Dashboard Overview"}
-              {tab === "calendar" && "My Calendar & Sessions"}
-              {tab === "availability" && "Weekly Availability Schedule"}
-              {tab === "profile" && "Teacher Profile & Specialties"}
-              {tab === "reviews" && "Student Ratings & Reviews"}
-              {tab === "earnings" && "Earnings & Mobile Money"}
-              {tab === "support" && "Help & Support Tickets"}
-            </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Welcome back, {user?.email?.split("@")[0] ?? "Teacher"}. Here is what’s happening with your students today.
-            </p>
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8 pb-4 border-b border-border/80">
+          <div className="flex items-center justify-between w-full sm:w-auto">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setMobileNavOpen(true)}
+                className="lg:hidden flex size-9 items-center justify-center rounded-xl border border-border bg-card text-ink hover:bg-secondary transition-colors"
+                aria-label="Open navigation menu"
+              >
+                <Menu className="size-5" />
+              </button>
+              <div>
+                <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink">
+                  {tab === "overview" && "Dashboard Overview"}
+                  {tab === "calendar" && "My Calendar & Sessions"}
+                  {tab === "availability" && "Weekly Availability Schedule"}
+                  {tab === "profile" && "Teacher Profile & Specialties"}
+                  {tab === "reviews" && "Student Ratings & Reviews"}
+                  {tab === "earnings" && "Earnings & Mobile Money"}
+                  {tab === "support" && "Help & Support Tickets"}
+                </h1>
+                <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">
+                  Welcome back, {user?.email?.split("@")[0] ?? "Teacher"}.
+                </p>
+              </div>
+            </div>
+
+            {/* Mobile Actions: Notifications & Avatar */}
+            <div className="flex items-center gap-2 sm:hidden">
+              <div className="relative">
+                <button
+                  onClick={() => setNotifOpen(v => !v)}
+                  className="relative flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card hover:bg-secondary transition-colors"
+                  aria-label="Notifications"
+                >
+                  <Bell className="size-4 text-ink" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-white animate-pulse">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {notifOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-sm rounded-2xl border border-border bg-card shadow-2xl z-50 overflow-hidden fade-in">
+                    <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-secondary/50">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold">Notifications</p>
+                        {unreadCount > 0 && (
+                          <span className="rounded-full bg-brand/15 text-brand px-2 py-0.5 text-[10px] font-bold">
+                            {unreadCount} new
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={markAllRead}
+                            className="text-[11px] font-medium text-brand hover:underline flex items-center gap-1"
+                          >
+                            <CheckCheck className="size-3" />
+                            Mark read
+                          </button>
+                        )}
+                        <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground">
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto divide-y divide-border">
+                      {notifications.length === 0 ? (
+                        <p className="px-4 py-8 text-center text-xs text-muted-foreground">No new notifications</p>
+                      ) : (
+                        notifications.map(n => {
+                          const Icon = n.type === 'payment' ? CreditCard :
+                                       n.type === 'message' ? MessageSquare :
+                                       n.type === 'support' ? AlertCircle : CalendarCheck;
+                          const iconBg = n.type === 'payment' ? 'bg-emerald-100 text-emerald-700' :
+                                         n.type === 'message' ? 'bg-blue-100 text-blue-700' :
+                                         n.type === 'support' ? 'bg-amber-100 text-amber-700' :
+                                         'bg-purple-100 text-purple-700';
+
+                          return (
+                            <div
+                              key={n.id}
+                              onClick={() => handleNotificationClick(n)}
+                              className={`p-3.5 hover:bg-secondary/60 transition-colors cursor-pointer flex items-start gap-3 ${
+                                !n.is_read ? 'bg-brand/5' : ''
+                              }`}
+                            >
+                              <div className={`size-8 rounded-xl shrink-0 flex items-center justify-center ${iconBg}`}>
+                                <Icon className="size-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <p className={`text-xs truncate ${!n.is_read ? 'font-bold text-ink' : 'font-medium text-ink/80'}`}>
+                                    {n.title}
+                                  </p>
+                                  {!n.is_read && <span className="size-2 rounded-full bg-brand shrink-0" />}
+                                </div>
+                                <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                                  {n.message}
+                                </p>
+                                <p className="mt-1 text-[9px] text-muted-foreground/70">
+                                  {new Date(n.created_at).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="size-9 rounded-full bg-brand-soft text-brand border border-brand/20 flex items-center justify-center font-bold text-xs">
+                {user?.email?.[0]?.toUpperCase() ?? "T"}
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Live Notification Bell */}
+          {/* Desktop Actions */}
+          <div className="hidden sm:flex items-center gap-3">
             <div className="relative">
               <button
                 onClick={() => setNotifOpen(v => !v)}
@@ -502,7 +722,7 @@ function TeacherDashboard() {
               <Link
                 to="/teacher/$id"
                 params={{ id: user.id }}
-                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border bg-card hover:bg-secondary text-ink transition-colors"
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border bg-card hover:bg-secondary text-ink transition-colors"
               >
                 <ExternalLink className="size-3.5 text-brand" />
                 Live Page
@@ -514,23 +734,52 @@ function TeacherDashboard() {
           </div>
         </header>
 
-        {/* ── Stat Cards Grid ── */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        {/* ── Mobile Horizontal Quick-Tab Bar ── */}
+        <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto pb-3 mb-6 -mx-4 px-4 scrollbar-none">
+          {NAV_ITEMS.map(item => {
+            const Icon = item.icon;
+            const isActive = tab === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => setTab(item.key)}
+                className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  isActive
+                    ? "bg-brand text-primary-foreground shadow-sm"
+                    : "bg-card border border-border text-muted-foreground hover:bg-secondary hover:text-ink"
+                }`}
+              >
+                <Icon className="size-3.5" />
+                <span>{item.label}</span>
+                {'badge' in item && item.badge !== undefined && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                    isActive ? "bg-white text-brand" : "bg-brand/10 text-brand"
+                  }`}>
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Stat Cards Grid (Mobile 2-cols, Desktop 4-cols) ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           {[
             { label: "Total Bookings", value: bookings.length, sub: "All time sessions", icon: Calendar, color: "text-brand" },
             { label: "Confirmed Sessions", value: bookings.filter((b: any) => b.status === "confirmed").length, sub: "Upcoming lessons", icon: CheckCircle, color: "text-green-600" },
             { label: "Avg. Rating", value: avgRating ? `${avgRating.toFixed(1)} ★` : "New (5.0 ★)", sub: `${reviews.length} reviews`, icon: Star, color: "text-amber-500" },
-            { label: "Your Net Take-Home (85%)", value: `GHS ${((totalEarningsCents * 0.85) / 100).toFixed(2)}`, sub: `After 15% platform deduction · GHS ${(totalEarningsCents / 100).toFixed(2)} gross`, icon: Banknote, color: "text-emerald-600" },
+            { label: "Net Take-Home", value: `GHS ${((totalEarningsCents * 0.85) / 100).toFixed(2)}`, sub: "85% after 15% fee", icon: Banknote, color: "text-emerald-600" },
           ].map((s, idx) => {
             const Icon = s.icon;
             return (
-              <div key={idx} className="rounded-2xl bg-card p-5 border border-border/80 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
+              <div key={idx} className="rounded-2xl bg-card p-4 sm:p-5 border border-border/80 shadow-sm hover:shadow-md transition-all duration-300">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-muted-foreground">{s.label}</p>
-                  <Icon className={`size-4 ${s.color}`} />
+                  <p className="text-[11px] sm:text-xs font-semibold text-muted-foreground line-clamp-1">{s.label}</p>
+                  <Icon className={`size-4 shrink-0 ${s.color}`} />
                 </div>
-                <p className="mt-2 font-serif text-2xl font-bold text-ink">{s.value}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">{s.sub}</p>
+                <p className="mt-2 font-serif text-xl sm:text-2xl font-bold text-ink truncate">{s.value}</p>
+                <p className="mt-1 text-[9px] sm:text-[10px] text-muted-foreground truncate">{s.sub}</p>
               </div>
             );
           })}
@@ -538,31 +787,31 @@ function TeacherDashboard() {
 
         {/* ── TAB 1: OVERVIEW ── */}
         {tab === "overview" && (
-          <div className="space-y-8 fade-in">
+          <div className="space-y-6 sm:space-y-8 fade-in">
             {/* Next session hero */}
             {upcomingBooking ? (
-              <div className="rounded-3xl bg-brand p-8 text-primary-foreground shadow-lg relative overflow-hidden group">
+              <div className="rounded-2xl sm:rounded-3xl bg-brand p-5 sm:p-8 text-primary-foreground shadow-lg relative overflow-hidden group">
                 <div className="absolute top-0 right-0 -mt-16 -mr-16 size-64 rounded-full bg-white/10 blur-3xl transition-transform duration-700 group-hover:scale-150" />
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-widest bg-white/20 px-3 py-1 rounded-full">
                       Next Confirmed Lesson
                     </span>
-                    <h3 className="font-serif text-4xl mt-3">{upcomingBooking.profiles?.full_name ?? "Student"}</h3>
-                    <p className="text-sm opacity-90 mt-1 flex items-center gap-1.5"><Clock className="size-4" /> {formatDateTime(upcomingBooking.scheduled_at)}</p>
+                    <h3 className="font-serif text-2xl sm:text-4xl mt-3">{upcomingBooking.profiles?.full_name ?? "Student"}</h3>
+                    <p className="text-xs sm:text-sm opacity-90 mt-1 flex items-center gap-1.5"><Clock className="size-4 shrink-0" /> {formatDateTime(upcomingBooking.scheduled_at)}</p>
                   </div>
                   {upcomingBooking.paystack_reference ? (
                     <Link
                       to="/room/$id"
                       params={{ id: upcomingBooking.room_id ?? upcomingBooking.id }}
-                      className="inline-flex items-center justify-center gap-2 h-11 px-8 rounded-full bg-white text-brand font-bold text-sm shadow-md hover:bg-white/90 transition-all hover:scale-105"
+                      className="inline-flex items-center justify-center gap-2 h-11 px-6 sm:px-8 rounded-full bg-white text-brand font-bold text-xs sm:text-sm shadow-md hover:bg-white/90 transition-all hover:scale-105"
                     >
                       <Video className="size-4" />
                       Enter Classroom Room
                     </Link>
                   ) : (
-                    <span className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-white/20 text-white/90 font-semibold text-sm border border-white/30">
-                      <Clock className="size-4" />
+                    <span className="inline-flex items-center justify-center gap-2 h-11 px-5 sm:px-6 rounded-full bg-white/20 text-white/90 font-semibold text-xs sm:text-sm border border-white/30 text-center">
+                      <Clock className="size-4 shrink-0" />
                       Awaiting Student Payment
                     </span>
                   )}
@@ -578,9 +827,9 @@ function TeacherDashboard() {
             )}
 
             {/* Pending Requests & Recent Bookings */}
-            <div className="rounded-2xl bg-card border border-border p-6 shadow-sm">
+            <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-serif text-xl font-bold text-ink">Recent Student Bookings</h3>
+                <h3 className="font-serif text-lg sm:text-xl font-bold text-ink">Recent Student Bookings</h3>
                 <button onClick={() => setTab("calendar")} className="text-xs font-semibold text-brand hover:underline">
                   View All ({bookings.length})
                 </button>
@@ -591,12 +840,12 @@ function TeacherDashboard() {
               ) : (
                 <div className="divide-y divide-border">
                   {bookings.slice(0, 5).map((b: any) => (
-                    <div key={b.id} className="py-4 flex flex-wrap items-center justify-between gap-3 group hover:bg-secondary/20 -mx-4 px-4 rounded-xl transition-colors">
+                    <div key={b.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:bg-secondary/20 -mx-2 sm:-mx-4 px-2 sm:px-4 rounded-xl transition-colors">
                       <div>
                         <p className="text-sm font-semibold text-ink">{b.profiles?.full_name ?? "Student"}</p>
-                        <p className="text-xs text-muted-foreground">{formatDateTime(b.scheduled_at)} · GH₵{(b.price_cents / 100).toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(b.scheduled_at)} · GH₵{(b.price_cents / 100).toFixed(2)}</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                           b.status === "confirmed" ? "bg-green-100 text-green-700" :
                           b.status === "pending" ? "bg-amber-100 text-amber-700" :
@@ -609,7 +858,7 @@ function TeacherDashboard() {
                         {b.status === "pending" && (
                           <button
                             onClick={() => updateBookingStatus(b.id, "confirmed")}
-                            className="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
                           >
                             Accept
                           </button>
@@ -619,7 +868,7 @@ function TeacherDashboard() {
                             <Link
                               to="/room/$id"
                               params={{ id: b.room_id ?? b.id }}
-                              className="px-3 py-1 bg-brand text-primary-foreground rounded-lg text-xs font-semibold hover:bg-brand/90 transition-colors"
+                              className="px-3 py-1.5 bg-brand text-primary-foreground rounded-lg text-xs font-semibold hover:bg-brand/90 transition-colors"
                             >
                               Join Room
                             </Link>
@@ -643,12 +892,12 @@ function TeacherDashboard() {
         {tab === "calendar" && (
           <div className="space-y-6 fade-in">
             {/* Filter Pills */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
               {(["all", "pending", "confirmed", "completed", "cancelled"] as const).map(k => (
                 <button
                   key={k}
                   onClick={() => setBookingFilter(k)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-semibold capitalize transition-all ${
+                  className={`shrink-0 px-3.5 sm:px-4 py-1.5 rounded-full text-xs font-semibold capitalize whitespace-nowrap transition-all ${
                     bookingFilter === k
                       ? "bg-ink text-primary-foreground shadow-sm"
                       : "bg-card border border-border text-muted-foreground hover:bg-secondary"
@@ -660,13 +909,13 @@ function TeacherDashboard() {
             </div>
 
             {/* Bookings List */}
-            <div className="rounded-2xl bg-card border border-border p-6 shadow-sm">
+            <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-sm">
               {filteredBookings.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">No bookings found for this filter.</p>
               ) : (
                 <div className="space-y-3">
                   {filteredBookings.map((b: any) => (
-                    <div key={b.id} className="p-5 rounded-2xl bg-card border border-border flex flex-wrap items-center justify-between gap-4 hover:shadow-md hover:border-brand/30 transition-all duration-300">
+                    <div key={b.id} className="p-4 sm:p-5 rounded-2xl bg-card border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 hover:shadow-md hover:border-brand/30 transition-all duration-300">
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-base font-bold text-ink">{b.profiles?.full_name ?? "Student"}</p>
@@ -682,7 +931,7 @@ function TeacherDashboard() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {b.status === "pending" && (
                           <>
                             <span className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-1.5">
@@ -703,7 +952,7 @@ function TeacherDashboard() {
                               <Link
                                 to="/room/$id"
                                 params={{ id: b.room_id ?? b.id }}
-                                className="px-4 py-2 bg-brand text-primary-foreground rounded-lg text-xs font-semibold hover:bg-brand/90"
+                                className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-brand text-primary-foreground rounded-lg text-xs font-semibold hover:bg-brand/90"
                               >
                                 Enter Lesson Room
                               </Link>
@@ -715,13 +964,13 @@ function TeacherDashboard() {
                             )}
                             <button
                               onClick={() => updateBookingStatus(b.id, "completed")}
-                              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
+                              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
                             >
                               Mark Completed
                             </button>
                             <button
                               onClick={() => updateBookingStatus(b.id, "cancelled")}
-                              className="px-3 py-2 border border-border text-xs text-destructive rounded-lg hover:bg-destructive/10"
+                              className="px-3 py-1.5 sm:px-4 sm:py-2 border border-border text-xs text-destructive rounded-lg hover:bg-destructive/10"
                             >
                               Cancel
                             </button>
@@ -731,7 +980,7 @@ function TeacherDashboard() {
                           <Link
                             to="/messages"
                             search={{ contactId: b.student_id }}
-                            className="px-3 py-2 border border-border text-xs font-semibold rounded-lg hover:bg-secondary flex items-center gap-1"
+                            className="px-3 py-1.5 sm:px-3 sm:py-2 border border-border text-xs font-semibold rounded-lg hover:bg-secondary flex items-center gap-1"
                           >
                             <MessageSquare className="size-3 text-brand" />
                             Message
@@ -743,7 +992,7 @@ function TeacherDashboard() {
                             bookingId: b.id,
                             label: `${b.profiles?.full_name ?? "Student"} · ${formatDateTime(b.scheduled_at)}`,
                           })}
-                          className="px-2.5 py-2 border border-border text-xs font-semibold rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-1"
+                          className="px-2.5 py-1.5 sm:px-2.5 sm:py-2 border border-border text-xs font-semibold rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-1"
                           title="Report an issue with this session"
                         >
                           <AlertCircle className="size-3 text-destructive" />
@@ -760,9 +1009,9 @@ function TeacherDashboard() {
 
         {/* ── TAB 3: AVAILABILITY ── */}
         {tab === "availability" && (
-          <div className="rounded-2xl bg-card border border-border p-6 shadow-sm fade-in space-y-6">
+          <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-sm fade-in space-y-5 sm:space-y-6">
             <div>
-              <h3 className="font-serif text-xl font-bold text-ink">Weekly Teaching Hours</h3>
+              <h3 className="font-serif text-lg sm:text-xl font-bold text-ink">Weekly Teaching Hours</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Students will be able to book 60-minute slots during your defined available time windows.
               </p>
@@ -770,42 +1019,44 @@ function TeacherDashboard() {
 
             <div className="space-y-3">
               {availability.map((s, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-3 p-3.5 rounded-xl bg-secondary/40 border border-border">
-                  <select
-                    value={s.day_of_week}
-                    onChange={e => updateSlot(idx, "day_of_week", Number(e.target.value))}
-                    className="h-9 rounded-lg border border-input bg-card px-3 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand"
-                  >
-                    {DAYS.map((d, di) => (
-                      <option key={d} value={di}>{d}</option>
-                    ))}
-                  </select>
+                <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-secondary/40 border border-border">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <select
+                      value={s.day_of_week}
+                      onChange={e => updateSlot(idx, "day_of_week", Number(e.target.value))}
+                      className="h-9 rounded-lg border border-input bg-card px-3 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-brand"
+                    >
+                      {DAYS.map((d, di) => (
+                        <option key={d} value={di}>{d}</option>
+                      ))}
+                    </select>
 
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span>From</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={23}
-                      value={s.start_hour}
-                      onChange={e => updateSlot(idx, "start_hour", Number(e.target.value))}
-                      className="h-9 w-16 rounded-lg border border-input bg-card px-2 text-center text-xs font-semibold"
-                    />
-                    <span>:00 to</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={24}
-                      value={s.end_hour}
-                      onChange={e => updateSlot(idx, "end_hour", Number(e.target.value))}
-                      className="h-9 w-16 rounded-lg border border-input bg-card px-2 text-center text-xs font-semibold"
-                    />
-                    <span>:00 (GMT)</span>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span>From</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={s.start_hour}
+                        onChange={e => updateSlot(idx, "start_hour", Number(e.target.value))}
+                        className="h-9 w-14 sm:w-16 rounded-lg border border-input bg-card px-2 text-center text-xs font-semibold"
+                      />
+                      <span>:00 to</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={s.end_hour}
+                        onChange={e => updateSlot(idx, "end_hour", Number(e.target.value))}
+                        className="h-9 w-14 sm:w-16 rounded-lg border border-input bg-card px-2 text-center text-xs font-semibold"
+                      />
+                      <span className="hidden sm:inline">:00 (GMT)</span>
+                    </div>
                   </div>
 
                   <button
                     onClick={() => removeSlot(idx)}
-                    className="ml-auto text-xs text-destructive hover:underline font-semibold"
+                    className="self-end sm:self-auto text-xs text-destructive hover:underline font-semibold"
                   >
                     Remove
                   </button>
@@ -833,8 +1084,8 @@ function TeacherDashboard() {
 
         {/* ── TAB 4: PROFILE & SUBJECTS ── */}
         {tab === "profile" && (
-          <div className="rounded-2xl bg-card border border-border p-6 shadow-sm fade-in space-y-6">
-            <h3 className="font-serif text-xl font-bold text-ink">Teaching Profile Details</h3>
+          <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-sm fade-in space-y-5 sm:space-y-6">
+            <h3 className="font-serif text-lg sm:text-xl font-bold text-ink">Teaching Profile Details</h3>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -932,35 +1183,33 @@ function TeacherDashboard() {
           </div>
         )}
 
-
-
         {/* ── TAB 6: EARNINGS ── */}
         {tab === "earnings" && (
           <div className="space-y-6 fade-in">
-            <div className="rounded-2xl bg-card border border-border p-6 shadow-sm space-y-6">
+            <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6">
               <div>
-                <h3 className="font-serif text-xl font-bold text-ink">Earnings &amp; Payout Overview</h3>
+                <h3 className="font-serif text-lg sm:text-xl font-bold text-ink">Earnings &amp; Payout Overview</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Platform fee (15%) is automatically deducted, leaving 85% net take-home earnings remitted directly to your Mobile Money wallet.
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-4">
-                <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Gross Booking Volume (100%)</p>
-                  <p className="mt-2 font-serif text-2xl font-bold text-ink">GHS {(totalEarningsCents / 100).toFixed(2)}</p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-secondary/50 border border-border">
+                  <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-muted-foreground line-clamp-1">Gross Volume</p>
+                  <p className="mt-1.5 sm:mt-2 font-serif text-lg sm:text-2xl font-bold text-ink">GHS {(totalEarningsCents / 100).toFixed(2)}</p>
                 </div>
-                <div className="p-4 rounded-xl bg-red-50/50 border border-red-200">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-destructive font-semibold">Platform Fee Deduction (-15%)</p>
-                  <p className="mt-2 font-serif text-2xl font-bold text-destructive">-GHS {((totalEarningsCents * 0.15) / 100).toFixed(2)}</p>
+                <div className="p-3.5 sm:p-4 rounded-xl bg-red-50/50 border border-red-200">
+                  <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-destructive font-semibold line-clamp-1">Fee (-15%)</p>
+                  <p className="mt-1.5 sm:mt-2 font-serif text-lg sm:text-2xl font-bold text-destructive">-GHS {((totalEarningsCents * 0.15) / 100).toFixed(2)}</p>
                 </div>
-                <div className="p-4 rounded-xl bg-green-50 border border-green-200">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-green-800 font-semibold">Your Net Take-Home (85%)</p>
-                  <p className="mt-2 font-serif text-2xl font-bold text-green-700">GHS {((totalEarningsCents * 0.85) / 100).toFixed(2)}</p>
+                <div className="p-3.5 sm:p-4 rounded-xl bg-green-50 border border-green-200">
+                  <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-green-800 font-semibold line-clamp-1">Net (85%)</p>
+                  <p className="mt-1.5 sm:mt-2 font-serif text-lg sm:text-2xl font-bold text-green-700">GHS {((totalEarningsCents * 0.85) / 100).toFixed(2)}</p>
                 </div>
-                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800 font-semibold">Pending MoMo Payout</p>
-                  <p className="mt-2 font-serif text-2xl font-bold text-amber-700">GHS {((pendingPayoutCents * 0.85) / 100).toFixed(2)}</p>
+                <div className="p-3.5 sm:p-4 rounded-xl bg-amber-50 border border-amber-200">
+                  <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-amber-800 font-semibold line-clamp-1">Pending Payout</p>
+                  <p className="mt-1.5 sm:mt-2 font-serif text-lg sm:text-2xl font-bold text-amber-700">GHS {((pendingPayoutCents * 0.85) / 100).toFixed(2)}</p>
                 </div>
               </div>
 
@@ -969,11 +1218,11 @@ function TeacherDashboard() {
                   <div>
                     <h4 className="font-bold text-xs text-brand uppercase tracking-wider">Mobile Money Payout Setup</h4>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Payouts are settled automatically after each completed lesson. Ensure this is an active MoMo wallet (MTN MoMo, Telecel Cash, AirtelTigo).
+                      Payouts are settled automatically after each completed lesson (MTN MoMo, Telecel Cash, AirtelTigo).
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 max-w-sm flex gap-2">
+                <div className="mt-3.5 max-w-sm flex flex-col sm:flex-row gap-2">
                   <input
                     type="tel"
                     placeholder="e.g. 0241234567"
@@ -984,7 +1233,7 @@ function TeacherDashboard() {
                   <button
                     onClick={saveProfile}
                     disabled={saving}
-                    className="h-10 px-4 rounded-lg bg-brand text-primary-foreground text-xs font-semibold shadow-sm hover:bg-brand/90 disabled:opacity-50 transition-colors"
+                    className="h-10 px-4 rounded-lg bg-brand text-primary-foreground text-xs font-semibold shadow-sm hover:bg-brand/90 disabled:opacity-50 transition-colors whitespace-nowrap"
                   >
                     {saving ? "..." : "Save MoMo"}
                   </button>
@@ -993,8 +1242,8 @@ function TeacherDashboard() {
             </div>
 
             {/* Completed Sessions Deduction Breakdown Table */}
-            <div className="rounded-2xl bg-card border border-border p-6 shadow-sm">
-              <h4 className="font-serif text-lg font-bold text-ink mb-1">Completed Lessons &amp; Net Take-Home Log</h4>
+            <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-sm">
+              <h4 className="font-serif text-base sm:text-lg font-bold text-ink mb-1">Completed Lessons &amp; Net Take-Home Log</h4>
               <p className="text-xs text-muted-foreground mb-4">Complete breakdown of gross student fees, 15% platform deduction, and your 85% payout per lesson.</p>
 
               {bookings.filter((b: any) => b.status === "completed").length === 0 ? (
@@ -1002,8 +1251,8 @@ function TeacherDashboard() {
                   No completed sessions yet. Complete your first lesson to view the itemized earnings breakdown!
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                  <table className="w-full text-left text-xs min-w-[540px]">
                     <thead>
                       <tr className="border-b border-border text-muted-foreground">
                         <th className="pb-3 font-semibold">Date &amp; Time</th>
@@ -1049,17 +1298,17 @@ function TeacherDashboard() {
 
         {/* ── TAB 7: SUPPORT & DISPUTE TICKETS ── */}
         {tab === "support" && (
-          <div className="rounded-2xl bg-card border border-border p-6 shadow-sm fade-in space-y-6">
-            <div className="flex items-center justify-between">
+          <div className="rounded-2xl bg-card border border-border p-4 sm:p-6 shadow-sm fade-in space-y-5 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="font-serif text-xl font-bold text-ink">My Support Reports &amp; Admin Responses</h3>
+                <h3 className="font-serif text-lg sm:text-xl font-bold text-ink">My Support Reports &amp; Admin Responses</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Track help tickets submitted to QuickTutor Administration and view admin answers and dispute resolutions.
                 </p>
               </div>
               <button
                 onClick={() => setReportModal({ open: true, bookingId: null, label: null })}
-                className="h-9 px-4 rounded-xl bg-brand text-primary-foreground text-xs font-semibold hover:bg-brand/90 transition-colors"
+                className="self-start sm:self-auto h-9 px-4 rounded-xl bg-brand text-primary-foreground text-xs font-semibold hover:bg-brand/90 transition-colors"
               >
                 + New Support Ticket
               </button>
