@@ -168,11 +168,11 @@ function LessonRoom() {
         if (!remoteStreamRef.current) {
           remoteStreamRef.current = new MediaStream();
         }
-        e.streams[0]?.getTracks().forEach((t) => {
-          if (remoteStreamRef.current && !remoteStreamRef.current.getTracks().includes(t)) {
-            remoteStreamRef.current.addTrack(t);
-          }
-        });
+        // Use e.track directly — e.streams[0] is undefined in many browsers/environments
+        const track = e.track;
+        if (track && !remoteStreamRef.current.getTracks().find(t => t.id === track.id)) {
+          remoteStreamRef.current.addTrack(track);
+        }
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStreamRef.current;
         }
@@ -368,19 +368,29 @@ function LessonRoom() {
       if (camTrack) {
         if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
         const sender = pcRef.current?.getSenders().find((s) => s.track?.kind === "video");
-        sender?.replaceTrack(camTrack);
+        if (sender) await sender.replaceTrack(camTrack);
       }
       setSharing(false);
       return;
     }
+    // Guard: peer connection must exist (both users joined)
+    if (!pcRef.current) {
+      toast.info("Wait for your lesson partner to join before sharing your screen.");
+      return;
+    }
     try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       screenStreamRef.current = screenStream;
       const screenTrack = screenStream.getVideoTracks()[0];
       if (localVideoRef.current) localVideoRef.current.srcObject = screenStream;
       const sender = pcRef.current?.getSenders().find((s) => s.track?.kind === "video");
-      sender?.replaceTrack(screenTrack);
-      screenTrack.onended = () => setSharing(false);
+      if (sender) {
+        await sender.replaceTrack(screenTrack);
+      } else {
+        // No existing video sender — add the track
+        pcRef.current.addTrack(screenTrack, screenStream);
+      }
+      screenTrack.onended = () => shareScreen(); // auto-stop on browser UI cancel
       setSharing(true);
     } catch { /* user cancelled */ }
   };

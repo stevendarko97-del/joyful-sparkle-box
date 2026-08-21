@@ -75,7 +75,7 @@ io.on('connection', async (socket) => {
   // 2. Validate booking existence, payment confirmation, AND participant ownership
   try {
     const { rows: bCheck } = await pool.query(
-      'SELECT status, student_id, teacher_id FROM bookings WHERE id = $1',
+      'SELECT status, student_id, teacher_id, paystack_reference FROM bookings WHERE id = $1',
       [bookingId]
     );
     if (!bCheck.length) {
@@ -85,8 +85,17 @@ io.on('connection', async (socket) => {
     }
 
     const booking = bCheck[0];
-    if (booking.status === 'pending') {
+
+    // Block entry if booking is pending OR if student has not paid (paystack_reference is null)
+    if (booking.status === 'pending' || !booking.paystack_reference) {
       socket.emit('error', { message: 'Payment required before entering live classroom' });
+      socket.disconnect();
+      return;
+    }
+
+    // Block cancelled bookings
+    if (booking.status === 'cancelled') {
+      socket.emit('error', { message: 'This booking has been cancelled' });
       socket.disconnect();
       return;
     }
@@ -125,6 +134,12 @@ io.on('connection', async (socket) => {
   socket.on('chat', ({ text }) => {
     socket.to(bookingId).emit('chat', { text, senderName: 'Lesson partner', ts: Date.now() });
   });
+
+  // Whiteboard relay — these were missing, causing draw strokes to be local-only
+  socket.on('draw-start', (data) => socket.to(bookingId).emit('draw-start', data));
+  socket.on('draw', (data) => socket.to(bookingId).emit('draw', data));
+  socket.on('draw-clear', () => socket.to(bookingId).emit('draw-clear'));
+  socket.on('whiteboard-toggle', (data) => socket.to(bookingId).emit('whiteboard-toggle', data));
 
   socket.on('disconnect', () => {
     const m = rooms.get(bookingId);
@@ -686,7 +701,7 @@ app.get('/api/teacher/dashboard', requireAuth, async (req: Request, res: Respons
       pool.query('SELECT * FROM teacher_profiles WHERE user_id = $1', [userId]),
       pool.query('SELECT bio, phone FROM profiles WHERE id = $1', [userId]),
       pool.query('SELECT topic_id, is_specialty FROM teacher_topics WHERE teacher_id = $1', [userId]),
-      pool.query('SELECT b.id, b.scheduled_at, b.status, b.price_cents, p.full_name as student_name FROM bookings b JOIN profiles p ON b.student_id = p.id WHERE b.teacher_id = $1 ORDER BY b.scheduled_at DESC', [userId]),
+      pool.query('SELECT b.id, b.scheduled_at, b.status, b.price_cents, b.room_id, b.paystack_reference, p.full_name as student_name FROM bookings b JOIN profiles p ON b.student_id = p.id WHERE b.teacher_id = $1 ORDER BY b.scheduled_at DESC', [userId]),
       pool.query('SELECT id, day_of_week, start_hour, end_hour FROM teacher_availability WHERE teacher_id = $1 ORDER BY day_of_week', [userId]),
       pool.query('SELECT id, title, message, created_at FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10', [userId]),
       pool.query('SELECT r.id, r.stars, r.comment, r.created_at, p.full_name as student_name FROM ratings r JOIN profiles p ON r.student_id = p.id WHERE r.teacher_id = $1 ORDER BY r.created_at DESC LIMIT 5', [userId]),

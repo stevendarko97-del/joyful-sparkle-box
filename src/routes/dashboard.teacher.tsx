@@ -551,14 +551,21 @@ function TeacherDashboard() {
                     <h3 className="font-serif text-4xl mt-3">{upcomingBooking.profiles?.full_name ?? "Student"}</h3>
                     <p className="text-sm opacity-90 mt-1 flex items-center gap-1.5"><Clock className="size-4" /> {formatDateTime(upcomingBooking.scheduled_at)}</p>
                   </div>
-                  <Link
-                    to="/room/$id"
-                    params={{ id: upcomingBooking.id }}
-                    className="inline-flex items-center justify-center gap-2 h-11 px-8 rounded-full bg-white text-brand font-bold text-sm shadow-md hover:bg-white/90 transition-all hover:scale-105"
-                  >
-                    <Video className="size-4" />
-                    Enter Classroom Room
-                  </Link>
+                  {upcomingBooking.paystack_reference ? (
+                    <Link
+                      to="/room/$id"
+                      params={{ id: upcomingBooking.room_id ?? upcomingBooking.id }}
+                      className="inline-flex items-center justify-center gap-2 h-11 px-8 rounded-full bg-white text-brand font-bold text-sm shadow-md hover:bg-white/90 transition-all hover:scale-105"
+                    >
+                      <Video className="size-4" />
+                      Enter Classroom Room
+                    </Link>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-white/20 text-white/90 font-semibold text-sm border border-white/30">
+                      <Clock className="size-4" />
+                      Awaiting Student Payment
+                    </span>
+                  )}
                 </div>
               </div>
             ) : (
@@ -608,13 +615,20 @@ function TeacherDashboard() {
                           </button>
                         )}
                         {b.status === "confirmed" && (
-                          <Link
-                            to="/room/$id"
-                            params={{ id: b.id }}
-                            className="px-3 py-1 bg-brand text-primary-foreground rounded-lg text-xs font-semibold hover:bg-brand/90 transition-colors"
-                          >
-                            Join Room
-                          </Link>
+                          b.paystack_reference ? (
+                            <Link
+                              to="/room/$id"
+                              params={{ id: b.room_id ?? b.id }}
+                              className="px-3 py-1 bg-brand text-primary-foreground rounded-lg text-xs font-semibold hover:bg-brand/90 transition-colors"
+                            >
+                              Join Room
+                            </Link>
+                          ) : (
+                            <span className="px-3 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold flex items-center gap-1.5">
+                              <Clock className="size-3 text-amber-500" />
+                              Awaiting Payment
+                            </span>
+                          )
                         )}
                       </div>
                     </div>
@@ -685,13 +699,20 @@ function TeacherDashboard() {
                         )}
                         {b.status === "confirmed" && (
                           <>
-                            <Link
-                              to="/room/$id"
-                              params={{ id: b.id }}
-                              className="px-4 py-2 bg-brand text-primary-foreground rounded-lg text-xs font-semibold hover:bg-brand/90"
-                            >
-                              Enter Lesson Room
-                            </Link>
+                            {b.paystack_reference ? (
+                              <Link
+                                to="/room/$id"
+                                params={{ id: b.room_id ?? b.id }}
+                                className="px-4 py-2 bg-brand text-primary-foreground rounded-lg text-xs font-semibold hover:bg-brand/90"
+                              >
+                                Enter Lesson Room
+                              </Link>
+                            ) : (
+                              <span className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-1.5">
+                                <Clock className="size-3.5 text-amber-600" />
+                                Awaiting Student Payment
+                              </span>
+                            )}
                             <button
                               onClick={() => updateBookingStatus(b.id, "completed")}
                               className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
