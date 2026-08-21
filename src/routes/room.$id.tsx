@@ -22,9 +22,27 @@ const BACKEND = getBackendUrl();
 
 type Msg = { id: string; sender: string; text: string; ts: number };
 
-const ICE_SERVERS = [
+// ICE servers — STUN + TURN relay (TURN is required in production for most real networks)
+const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  // Open Relay TURN — free public relay for production use
+  { urls: "stun:openrelay.metered.ca:80" },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turns:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
 
 function openPaystackPopup(
@@ -80,6 +98,7 @@ function LessonRoom() {
   const screenStreamRef = useRef<MediaStream | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const pendingCandidates = useRef<RTCIceCandidateInit[]>([]); // queue candidates before remote desc is set
 
   // Chat
   const [tab, setTab] = useState<"chat" | "attendance">("chat");
@@ -145,46 +164,74 @@ function LessonRoom() {
   }, []);
 
   const setupPeerConnection = useCallback(
-    (socket: Socket) => {
-      if (pcRef.current) return pcRef.current;
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      pcRef.current = pc;
+    (socket: Socket, forceNew = false) => {
+      if (pcRef.current && !forceNew) return pcRef.current;
+      if (pcRef.current) { pcRef.current.close(); pcRef.current = null; }
 
-      // Add local tracks
+      const pc = new RTCPeerConnection({
+        iceServers: ICE_SERVERS,
+        iceCandidatePoolSize: 10,
+        bundlePolicy: "max-bundle",
+        rtcpMuxPolicy: "require",
+      });
+      pcRef.current = pc;
+      pendingCandidates.current = [];
+
+      // Add local audio and video tracks
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => {
           pc.addTrack(track, localStreamRef.current!);
         });
       }
 
-      // Prepare remote stream
-      if (!remoteStreamRef.current) {
-        remoteStreamRef.current = new MediaStream();
-      }
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStreamRef.current;
-      }
+      // Prepare remote stream container
+      if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream();
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStreamRef.current;
 
       pc.ontrack = (e) => {
-        if (!remoteStreamRef.current) {
-          remoteStreamRef.current = new MediaStream();
+        console.log("[WebRTC] ontrack received:", e.track.kind);
+        if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream();
+
+        if (e.streams && e.streams[0]) {
+          e.streams[0].getTracks().forEach((track) => {
+            if (!remoteStreamRef.current?.getTracks().find((t) => t.id === track.id)) {
+              remoteStreamRef.current?.addTrack(track);
+            }
+          });
+        } else if (e.track) {
+          if (!remoteStreamRef.current.getTracks().find((t) => t.id === e.track.id)) {
+            remoteStreamRef.current.addTrack(e.track);
+          }
         }
-        // Use e.track directly — e.streams[0] is undefined in many browsers/environments
-        const track = e.track;
-        if (track && !remoteStreamRef.current.getTracks().find(t => t.id === track.id)) {
-          remoteStreamRef.current.addTrack(track);
-        }
+
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStreamRef.current;
+          remoteVideoRef.current.play().catch((err) => console.warn("[WebRTC] video play error:", err));
         }
         setRemoteConnected(true);
       };
 
       pc.onicecandidate = (e) => {
-        if (e.candidate) socket.emit("ice", e.candidate);
+        if (e.candidate) {
+          socket.emit("ice", { candidate: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate });
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log("[WebRTC] ICE state:", pc.iceConnectionState);
+        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+          setRemoteConnected(true);
+        }
+        if (pc.iceConnectionState === "failed") {
+          pc.restartIce();
+        }
+        if (pc.iceConnectionState === "disconnected") {
+          setRemoteConnected(false);
+        }
       };
 
       pc.onconnectionstatechange = () => {
+        console.log("[WebRTC] Connection state:", pc.connectionState);
         if (pc.connectionState === "connected") setRemoteConnected(true);
         if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
           setRemoteConnected(false);
@@ -195,6 +242,38 @@ function LessonRoom() {
     },
     []
   );
+
+  // Helper: safely add a queued or live ICE candidate
+  const addIceCandidate = useCallback(async (candidate: any) => {
+    const pc = pcRef.current;
+    if (!pc) return;
+    
+    // Normalize candidate
+    let candObj = candidate?.candidate && typeof candidate.candidate === "object" ? candidate.candidate : candidate;
+    if (!candObj) return;
+
+    if (!pc.remoteDescription || !pc.remoteDescription.type) {
+      pendingCandidates.current.push(candObj);
+      return;
+    }
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(candObj));
+    } catch (err) {
+      console.warn("[WebRTC] Failed to add ICE candidate:", err);
+    }
+  }, []);
+
+  // Helper: flush pending ICE candidates after remote description is set
+  const flushPendingCandidates = useCallback(async () => {
+    const pc = pcRef.current;
+    if (!pc) return;
+    const queue = pendingCandidates.current.splice(0);
+    for (const c of queue) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(c));
+      } catch { /* ignore stale */ }
+    }
+  }, []);
 
   const joinRoom = useCallback(async () => {
     setJoining(true);
@@ -250,54 +329,64 @@ function LessonRoom() {
         socket.disconnect();
       });
 
-      socket.on("joined", async ({ isInitiator }: { isInitiator: boolean }) => {
+      socket.on("joined", async () => {
         setupPeerConnection(socket);
+        if (localVideoRef.current && localStreamRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current;
+        }
         setJoined(true);
         setJoining(false);
       });
 
       socket.on("peer-joined", async () => {
-        // Another participant entered our room — initiate WebRTC offer
+        console.log("[WebRTC] Peer joined room — initiating WebRTC offer");
         const pc = setupPeerConnection(socket);
         try {
-          const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+          });
           await pc.setLocalDescription(offer);
-          socket.emit("offer", pc.localDescription);
+          socket.emit("offer", { sdp: pc.localDescription });
         } catch (err) {
-          console.error("Failed to create offer on peer-joined:", err);
+          console.error("[WebRTC] Failed to create offer:", err);
         }
       });
 
-      socket.on("offer", async ({ sdp }: { sdp: RTCSessionDescriptionInit }) => {
+      socket.on("offer", async (data: any) => {
+        console.log("[WebRTC] Handling offer");
         const pc = setupPeerConnection(socket);
         try {
+          const sdp = data?.sdp || data;
           await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+          await flushPendingCandidates();
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          socket.emit("answer", pc.localDescription);
+          socket.emit("answer", { sdp: pc.localDescription });
         } catch (err) {
-          console.error("Failed to handle offer:", err);
+          console.error("[WebRTC] Failed to handle offer:", err);
         }
       });
 
-      socket.on("answer", async ({ sdp }: { sdp: RTCSessionDescriptionInit }) => {
+      socket.on("answer", async (data: any) => {
+        console.log("[WebRTC] Handling answer");
         if (pcRef.current) {
           try {
+            const sdp = data?.sdp || data;
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(sdp));
+            await flushPendingCandidates();
           } catch (err) {
-            console.error("Failed to handle answer:", err);
+            console.error("[WebRTC] Failed to handle answer:", err);
           }
         }
       });
 
-      socket.on("ice", async (candidate: RTCIceCandidateInit) => {
-        if (pcRef.current && candidate) {
-          try {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
-          } catch (err) {
-            console.error("Failed to add ICE candidate:", err);
-          }
+      socket.on("ice", async (data: any) => {
+        let cand = data?.candidate ?? data;
+        if (cand && cand.candidate && typeof cand.candidate === "object") {
+          cand = cand.candidate;
         }
+        if (cand) await addIceCandidate(cand);
       });
 
       socket.on("peer-left", () => {
@@ -350,7 +439,7 @@ function LessonRoom() {
       setAccessError(err.message ?? "Failed to access camera/microphone.");
       setJoining(false);
     }
-  }, [bookingId, setupPeerConnection]);
+  }, [bookingId, setupPeerConnection, addIceCandidate, flushPendingCandidates]);
 
   const toggleMic = () => {
     const track = localStreamRef.current?.getAudioTracks()[0];
@@ -365,6 +454,7 @@ function LessonRoom() {
   const shareScreen = async () => {
     if (sharing) {
       screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
       const camTrack = localStreamRef.current?.getVideoTracks()[0];
       if (camTrack) {
         if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
@@ -388,11 +478,20 @@ function LessonRoom() {
       if (sender) {
         await sender.replaceTrack(screenTrack);
       } else {
-        // No existing video sender — add the track
         pcRef.current.addTrack(screenTrack, screenStream);
       }
-      screenTrack.onended = () => shareScreen(); // auto-stop on browser UI cancel
       setSharing(true);
+      screenTrack.onended = async () => {
+        screenStream.getTracks().forEach((t) => t.stop());
+        screenStreamRef.current = null;
+        const camTrack = localStreamRef.current?.getVideoTracks()[0];
+        if (camTrack) {
+          if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+          const s = pcRef.current?.getSenders().find((st) => st.track?.kind === "video");
+          if (s) await s.replaceTrack(camTrack);
+        }
+        setSharing(false);
+      };
     } catch { /* user cancelled */ }
   };
 

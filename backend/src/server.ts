@@ -126,9 +126,9 @@ io.on('connection', async (socket) => {
   }
 
   // Relay WebRTC signals
-  socket.on('offer', (sdp) => socket.to(bookingId).emit('offer', { sdp }));
-  socket.on('answer', (sdp) => socket.to(bookingId).emit('answer', { sdp }));
-  socket.on('ice', (candidate) => socket.to(bookingId).emit('ice', { candidate }));
+  socket.on('offer', (data) => socket.to(bookingId).emit('offer', data));
+  socket.on('answer', (data) => socket.to(bookingId).emit('answer', data));
+  socket.on('ice', (data) => socket.to(bookingId).emit('ice', data));
 
   // Chat relay
   socket.on('chat', ({ text }) => {
