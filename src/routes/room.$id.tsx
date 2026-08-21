@@ -557,9 +557,33 @@ function LessonRoom() {
     };
   };
 
+  const getTouchCoordinates = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !e.touches[0]) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (e.touches[0].clientX - rect.left) * scaleX,
+      y: (e.touches[0].clientY - rect.top) * scaleY
+    };
+  };
+
   const startDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
     drawing.current = true;
     const { x, y } = getCoordinates(e);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (ctx && canvas) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      socketRef.current?.emit("draw-start", { x, y, width: canvas.width, height: canvas.height });
+    }
+  };
+
+  const startTouchDraw = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    drawing.current = true;
+    const { x, y } = getTouchCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (ctx && canvas) {
@@ -572,6 +596,21 @@ function LessonRoom() {
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!drawing.current) return;
     const { x, y } = getCoordinates(e);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (ctx && canvas) {
+      ctx.strokeStyle = "#991b1b";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      socketRef.current?.emit("draw", { x, y, width: canvas.width, height: canvas.height });
+    }
+  };
+
+  const touchDraw = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return;
+    const { x, y } = getTouchCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (ctx && canvas) {
@@ -702,45 +741,45 @@ function LessonRoom() {
 
   const cancelled = booking.status === "cancelled";
 
-  return (
-    <div className="flex h-screen flex-col bg-ink text-primary-foreground">
+    return (
+    <div className="flex h-screen flex-col bg-ink text-primary-foreground overflow-hidden">
       {/* Header */}
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 px-5 py-3">
+      <header className="flex shrink-0 items-center justify-between gap-2 sm:gap-4 border-b border-white/10 px-3 sm:px-5 py-2.5 sm:py-3 bg-zinc-950">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">
-            Lesson with {otherName}
+          <p className="truncate text-xs sm:text-sm font-semibold flex items-center gap-1.5">
+            <span className="truncate">Lesson with {otherName}</span>
             {remoteConnected && joined && (
-              <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-green-400">
+              <span className="shrink-0 inline-flex items-center gap-1 text-[10px] text-green-400 font-normal">
                 <span className="size-1.5 rounded-full bg-green-400 animate-pulse" />
-                Connected
+                <span className="hidden xs:inline">Connected</span>
               </span>
             )}
           </p>
-          <p className="text-xs text-primary-foreground/60">
-            {new Date(booking.scheduled_at).toLocaleString()} · {booking.status}
+          <p className="text-[10px] sm:text-xs text-primary-foreground/60 truncate">
+            {new Date(booking.scheduled_at).toLocaleDateString()} · {booking.status}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => setReportOpen(true)}
-            className="shrink-0 rounded-full border border-destructive/40 text-destructive/90 px-3 py-1.5 text-xs font-medium hover:bg-destructive/10 transition-colors flex items-center gap-1.5"
+            className="shrink-0 rounded-full border border-destructive/40 text-destructive/90 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium hover:bg-destructive/10 transition-colors flex items-center gap-1"
             title="Report problem to admin"
           >
-            <AlertCircle className="size-3.5" />
-            Report Issue
+            <AlertCircle className="size-3 sm:size-3.5" />
+            <span className="hidden sm:inline">Report Issue</span>
           </button>
           <button
             onClick={handleLeaveClick}
-            className="shrink-0 rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium hover:bg-white/10 transition-colors"
+            className="shrink-0 rounded-full border border-white/20 px-3 sm:px-4 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium hover:bg-white/10 transition-colors"
           >
-            Leave classroom
+            Leave
           </button>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Main video area */}
-        <div className="relative min-h-[320px] flex-1 bg-black">
+        <div className="relative flex-1 bg-black min-h-[42vh] lg:min-h-0 flex items-center justify-center overflow-hidden">
           {cancelled ? (
             <div className="grid h-full place-items-center px-6 text-center text-sm text-primary-foreground/70">
               This lesson was cancelled — the classroom is closed.
@@ -752,32 +791,32 @@ function LessonRoom() {
 
               {/* Waiting overlay when remote not yet connected */}
               {!remoteConnected && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 p-4">
                   <div className="text-center">
                     <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                    <p className="text-sm text-primary-foreground/70">Waiting for {otherName} to join…</p>
+                    <p className="text-xs sm:text-sm text-primary-foreground/70">Waiting for {otherName} to join…</p>
                   </div>
                 </div>
               )}
 
               {/* Local video PiP */}
-              <div className="absolute bottom-20 right-4 w-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-800">
+              <div className="absolute bottom-16 sm:bottom-20 right-2 sm:right-4 w-24 sm:w-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-800 shadow-lg z-10">
                 <video ref={localVideoRef} autoPlay playsInline muted className="w-full object-cover" />
                 {!camOn && (
                   <div className="absolute inset-0 flex items-center justify-center bg-zinc-800">
-                    <VideoOff className="size-5 text-primary-foreground/50" />
+                    <VideoOff className="size-4 sm:size-5 text-primary-foreground/50" />
                   </div>
                 )}
               </div>
 
               {/* Whiteboard overlay */}
               {showWhiteboard && (
-                <div className="absolute inset-0 z-10 flex flex-col">
-                  <div className="flex shrink-0 items-center justify-between bg-black/90 px-4 py-2">
-                    <span className="text-xs font-semibold">Whiteboard</span>
+                <div className="absolute inset-0 z-30 flex flex-col bg-white">
+                  <div className="flex shrink-0 items-center justify-between bg-zinc-900 px-3 sm:px-4 py-2 border-b border-white/10">
+                    <span className="text-xs font-semibold text-white">Whiteboard (Live sync)</span>
                     <div className="flex gap-2">
-                      <button onClick={clearWhiteboard} className="rounded px-2 py-1 text-xs bg-white/10 hover:bg-white/20">Clear</button>
-                      <button onClick={() => setShowWhiteboard(false)} className="rounded px-2 py-1 text-xs bg-white/10 hover:bg-white/20">Close</button>
+                      <button onClick={clearWhiteboard} className="rounded px-2.5 py-1 text-xs bg-white/10 text-white hover:bg-white/20">Clear</button>
+                      <button onClick={() => setShowWhiteboard(false)} className="rounded px-2.5 py-1 text-xs bg-red-600/80 text-white hover:bg-red-600">Close</button>
                     </div>
                   </div>
                   <canvas
@@ -789,30 +828,33 @@ function LessonRoom() {
                     onMouseMove={draw}
                     onMouseUp={endDraw}
                     onMouseLeave={endDraw}
+                    onTouchStart={startTouchDraw}
+                    onTouchMove={touchDraw}
+                    onTouchEnd={endDraw}
                   />
                 </div>
               )}
 
-              {/* Controls */}
-              <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 flex items-center gap-2 rounded-full bg-black/70 px-4 py-2 backdrop-blur-sm">
+              {/* Controls Bar */}
+              <div className="absolute bottom-3 sm:bottom-4 left-1/2 z-20 -translate-x-1/2 flex items-center gap-1.5 sm:gap-2 rounded-full bg-black/80 px-3 sm:px-4 py-1.5 sm:py-2 backdrop-blur-md border border-white/10 shadow-2xl">
                 <button
                   onClick={toggleMic}
                   title={micOn ? "Mute" : "Unmute"}
-                  className={`flex size-10 items-center justify-center rounded-full transition-colors ${micOn ? "bg-white/10 hover:bg-white/20" : "bg-red-600 hover:bg-red-700"}`}
+                  className={`flex size-9 sm:size-10 items-center justify-center rounded-full transition-colors ${micOn ? "bg-white/10 hover:bg-white/20" : "bg-red-600 hover:bg-red-700"}`}
                 >
                   {micOn ? <Mic className="size-4" /> : <MicOff className="size-4" />}
                 </button>
                 <button
                   onClick={toggleCam}
                   title={camOn ? "Stop video" : "Start video"}
-                  className={`flex size-10 items-center justify-center rounded-full transition-colors ${camOn ? "bg-white/10 hover:bg-white/20" : "bg-red-600 hover:bg-red-700"}`}
+                  className={`flex size-9 sm:size-10 items-center justify-center rounded-full transition-colors ${camOn ? "bg-white/10 hover:bg-white/20" : "bg-red-600 hover:bg-red-700"}`}
                 >
                   {camOn ? <Video className="size-4" /> : <VideoOff className="size-4" />}
                 </button>
                 <button
                   onClick={shareScreen}
                   title={sharing ? "Stop sharing" : "Share screen"}
-                  className={`flex size-10 items-center justify-center rounded-full transition-colors ${sharing ? "bg-blue-600 hover:bg-blue-700" : "bg-white/10 hover:bg-white/20"}`}
+                  className={`flex size-9 sm:size-10 items-center justify-center rounded-full transition-colors ${sharing ? "bg-blue-600 hover:bg-blue-700" : "bg-white/10 hover:bg-white/20"}`}
                 >
                   <Monitor className="size-4" />
                 </button>
@@ -823,15 +865,15 @@ function LessonRoom() {
                      socketRef.current?.emit("whiteboard-toggle", { show });
                   }}
                   title="Whiteboard"
-                  className={`flex size-10 items-center justify-center rounded-full transition-colors ${showWhiteboard ? "bg-brand hover:bg-brand/80" : "bg-white/10 hover:bg-white/20"}`}
+                  className={`flex size-9 sm:size-10 items-center justify-center rounded-full transition-colors ${showWhiteboard ? "bg-brand hover:bg-brand/80" : "bg-white/10 hover:bg-white/20"}`}
                 >
                   <Pencil className="size-4" />
                 </button>
-                <div className="mx-1 h-6 w-px bg-white/20" />
+                <div className="mx-0.5 sm:mx-1 h-5 sm:h-6 w-px bg-white/20" />
                 <button
                   onClick={handleLeaveClick}
                   title="Leave / End Lesson"
-                  className="flex size-10 items-center justify-center rounded-full bg-red-600 hover:bg-red-700 transition-colors"
+                  className="flex size-9 sm:size-10 items-center justify-center rounded-full bg-red-600 hover:bg-red-700 transition-colors"
                 >
                   <PhoneOff className="size-4" />
                 </button>
@@ -839,46 +881,45 @@ function LessonRoom() {
             </>
           ) : (
             /* Pre-join screen */
-            <div className="grid h-full place-items-center px-6 text-center">
-              <div>
-                <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-white/5">
-                  <Video className="size-10 text-primary-foreground/40" />
+            <div className="grid h-full place-items-center px-4 sm:px-6 text-center py-8">
+              <div className="max-w-sm">
+                <div className="mx-auto mb-4 sm:mb-6 flex size-16 sm:size-20 items-center justify-center rounded-full bg-white/5">
+                  <Video className="size-8 sm:size-10 text-primary-foreground/40" />
                 </div>
-                <h2 className="font-serif text-3xl">Ready to join?</h2>
-                <p className="mt-3 max-w-[42ch] text-sm text-primary-foreground/70">
-                  Your camera and microphone will start when you join. Access is
-                  checked against your booking — only you and {otherName} can enter.
+                <h2 className="font-serif text-2xl sm:text-3xl">Ready to join?</h2>
+                <p className="mt-2 sm:mt-3 text-xs sm:text-sm text-primary-foreground/70 leading-relaxed">
+                  Your camera and microphone will start when you join. Access is checked against your confirmed booking.
                 </p>
                 {accessError && (
-                  <p className="mt-3 rounded-lg bg-red-900/30 px-4 py-2 text-sm text-red-400">{accessError}</p>
+                  <p className="mt-3 rounded-lg bg-red-900/30 px-4 py-2 text-xs text-red-400">{accessError}</p>
                 )}
                 <button
                   onClick={joinRoom}
                   disabled={joining}
-                  className="mt-6 h-11 rounded-full bg-brand px-8 text-sm font-semibold text-primary-foreground disabled:opacity-50 hover:bg-brand/90 transition-colors"
+                  className="mt-5 sm:mt-6 h-11 rounded-full bg-brand px-8 text-xs sm:text-sm font-semibold text-primary-foreground disabled:opacity-50 hover:bg-brand/90 transition-colors shadow-lg"
                 >
-                  {joining ? "Connecting…" : "Join lesson"}
+                  {joining ? "Connecting…" : "Join Lesson Room"}
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Sidebar */}
-        <aside className="w-80 shrink-0 flex flex-col border-l border-white/10 bg-white/[0.02]">
-          <div className="flex border-b border-white/10">
+        {/* Sidebar (Chat & Attendance Panel) */}
+        <aside className="w-full lg:w-80 shrink-0 h-[45vh] lg:h-auto flex flex-col border-t lg:border-t-0 lg:border-l border-white/10 bg-zinc-950/60">
+          <div className="flex border-b border-white/10 shrink-0 bg-zinc-900/50">
             <button
               onClick={() => setTab("chat")}
-              className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+              className={`flex-1 py-2.5 sm:py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
                 tab === "chat" ? "border-b-2 border-brand text-white" : "text-white/60 hover:text-white"
               }`}
             >
               <MessageSquare className="size-3.5" />
-              Lesson Chat
+              Lesson Chat {messages.length > 0 && `(${messages.length})`}
             </button>
             <button
               onClick={() => setTab("attendance")}
-              className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+              className={`flex-1 py-2.5 sm:py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
                 tab === "attendance" ? "border-b-2 border-brand text-white" : "text-white/60 hover:text-white"
               }`}
             >
@@ -888,9 +929,9 @@ function LessonRoom() {
           </div>
 
           {tab === "attendance" ? (
-            <div className="p-4 space-y-3 flex-1 overflow-y-auto">
+            <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 flex-1 overflow-y-auto">
               <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
-                <div className="size-8 rounded-full bg-brand flex items-center justify-center text-xs font-bold">
+                <div className="size-8 rounded-full bg-brand flex items-center justify-center text-xs font-bold shrink-0">
                   {user?.email?.[0]?.toUpperCase() ?? "U"}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -900,7 +941,7 @@ function LessonRoom() {
               </div>
 
               <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5">
-                <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-ink">
+                <div className="size-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-ink shrink-0">
                   {otherName[0]?.toUpperCase() ?? "P"}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -913,9 +954,9 @@ function LessonRoom() {
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 sm:space-y-3">
                 {messages.length === 0 && (
-                  <p className="text-center text-xs text-white/40 py-8">
+                  <p className="text-center text-xs text-white/40 py-6 sm:py-8">
                     Send a message to your lesson partner during the session.
                   </p>
                 )}
@@ -924,9 +965,9 @@ function LessonRoom() {
                     key={m.id}
                     className={`flex flex-col ${m.sender === "You" ? "items-end" : "items-start"}`}
                   >
-                    <span className="text-[10px] text-white/40 mb-1">{m.sender}</span>
+                    <span className="text-[9px] sm:text-[10px] text-white/40 mb-0.5">{m.sender}</span>
                     <div
-                      className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
+                      className={`max-w-[85%] rounded-2xl px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs leading-relaxed ${
                         m.sender === "You" ? "bg-brand text-white" : "bg-white/10 text-white"
                       }`}
                     >
@@ -942,7 +983,7 @@ function LessonRoom() {
                   e.preventDefault();
                   sendChat();
                 }}
-                className="p-3 border-t border-white/10 flex gap-2"
+                className="p-2 sm:p-3 border-t border-white/10 flex gap-2 bg-zinc-950 shrink-0"
               >
                 <input
                   value={draft}
@@ -950,12 +991,12 @@ function LessonRoom() {
                   placeholder={joined ? "Message…" : "Join to chat"}
                   maxLength={2000}
                   disabled={!joined}
-                  className="h-10 flex-1 rounded-full border border-border bg-card px-4 text-sm focus:outline-none focus:ring-1 focus:ring-brand disabled:opacity-40 text-foreground"
+                  className="h-9 sm:h-10 flex-1 rounded-full border border-white/20 bg-zinc-900 px-3.5 sm:px-4 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-brand disabled:opacity-40 text-white"
                 />
                 <button
                   type="submit"
                   disabled={!draft.trim() || !joined}
-                  className="h-10 rounded-full bg-brand px-4 text-xs font-semibold text-primary-foreground disabled:opacity-40"
+                  className="h-9 sm:h-10 rounded-full bg-brand px-3.5 sm:px-4 text-xs font-semibold text-primary-foreground disabled:opacity-40"
                 >
                   Send
                 </button>

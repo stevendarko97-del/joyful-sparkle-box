@@ -4,7 +4,7 @@ import { SiteNav } from "@/components/site-nav";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { CheckCheck } from "lucide-react";
+import { CheckCheck, ArrowLeft } from "lucide-react";
 
 type MessagesSearch = {
   contactId?: string;
@@ -187,17 +187,20 @@ function MessagesPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col">
       <SiteNav />
-      <div className="mx-auto flex w-full max-w-7xl flex-1 overflow-hidden px-6 py-8">
-        <div className="flex h-[calc(100vh-140px)] w-full overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+      <div className="mx-auto flex w-full max-w-7xl flex-1 overflow-hidden px-2 sm:px-6 py-2 sm:py-6">
+        <div className="flex h-[calc(100dvh-75px)] sm:h-[calc(100vh-140px)] w-full overflow-hidden rounded-2xl sm:rounded-3xl border border-border bg-card shadow-sm">
           
           {/* Contacts Sidebar */}
-          <div className="w-1/3 border-r border-border flex flex-col bg-surface/50">
-            <div className="p-6 border-b border-border">
-              <h2 className="font-serif text-2xl">Messages</h2>
+          <div className={`w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-surface/50 ${activeContact ? "hidden md:flex" : "flex"}`}>
+            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="font-serif text-xl sm:text-2xl font-bold text-ink">Messages</h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Conversations with your students &amp; tutors</p>
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-1.5">
               {contacts.length === 0 ? (
-                <div className="p-4 text-center text-sm text-muted-foreground">
+                <div className="p-8 text-center text-xs text-muted-foreground">
                   No conversations yet. Book a session or message a tutor to start!
                 </div>
               ) : (
@@ -205,28 +208,32 @@ function MessagesPage() {
                   <button
                     key={contact.id}
                     onClick={() => setActiveContact(contact)}
-                    className={`flex w-full items-center gap-4 rounded-2xl p-4 transition-all text-left ${
-                      activeContact?.id === contact.id ? "bg-brand/10 ring-1 ring-brand/20" : "hover:bg-secondary"
+                    className={`flex w-full items-center gap-3 rounded-xl p-3 transition-all text-left ${
+                      activeContact?.id === contact.id ? "bg-brand/10 ring-1 ring-brand/20" : "hover:bg-secondary/60"
                     }`}
                   >
-                    <div className="size-12 shrink-0 overflow-hidden rounded-full bg-secondary ring-1 ring-black/5">
+                    <div className="size-11 shrink-0 overflow-hidden rounded-full bg-secondary ring-1 ring-black/5 flex items-center justify-center">
                       {contact.avatar_url ? (
                         <img src={contact.avatar_url} alt="" className="size-full object-cover" />
                       ) : (
-                        <div className="flex size-full items-center justify-center bg-brand/5 text-brand font-bold">
+                        <div className="flex size-full items-center justify-center bg-brand/10 text-brand font-bold text-sm">
                           {contact.full_name[0]?.toUpperCase()}
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 overflow-hidden">
-                      <p className="truncate font-semibold">{contact.full_name}</p>
-                      {contact.last_message && (
-                        <p className="truncate text-xs text-muted-foreground">{contact.last_message}</p>
-                      )}
-                      {contact.last_message_at && (
-                        <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                          {new Date(contact.last_message_at).toLocaleDateString()}
-                        </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="truncate font-semibold text-xs sm:text-sm text-ink">{contact.full_name}</p>
+                        {contact.last_message_at && (
+                          <span className="text-[9px] text-muted-foreground shrink-0">
+                            {new Date(contact.last_message_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                      {contact.last_message ? (
+                        <p className="truncate text-xs text-muted-foreground mt-0.5">{contact.last_message}</p>
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground italic mt-0.5">Click to start chatting</p>
                       )}
                     </div>
                   </button>
@@ -236,26 +243,34 @@ function MessagesPage() {
           </div>
 
           {/* Chat Window */}
-          <div className="flex flex-1 flex-col bg-card">
+          <div className={`flex-1 flex-col bg-card ${activeContact ? "flex" : "hidden md:flex"}`}>
             {activeContact ? (
               <>
                 {/* Chat Header */}
-                <div className="flex items-center justify-between border-b border-border p-6 shadow-sm z-10">
-                  <div className="flex items-center gap-4">
-                    <div className="size-10 shrink-0 overflow-hidden rounded-full bg-secondary">
+                <div className="flex items-center justify-between border-b border-border px-3.5 sm:px-6 py-3 sm:py-4 shadow-sm z-10 bg-card">
+                  <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                    <button
+                      onClick={() => setActiveContact(null)}
+                      className="md:hidden flex size-8 items-center justify-center rounded-lg bg-secondary text-ink hover:bg-secondary/80 shrink-0"
+                      aria-label="Back to contacts list"
+                    >
+                      <ArrowLeft className="size-4" />
+                    </button>
+
+                    <div className="size-9 sm:size-10 shrink-0 overflow-hidden rounded-full bg-secondary">
                       {activeContact.avatar_url ? (
                         <img src={activeContact.avatar_url} alt="" className="size-full object-cover" />
                       ) : (
-                        <div className="flex size-full items-center justify-center bg-brand/5 text-brand font-bold">
+                        <div className="flex size-full items-center justify-center bg-brand/10 text-brand font-bold text-xs sm:text-sm">
                           {activeContact.full_name[0]?.toUpperCase()}
                         </div>
                       )}
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{activeContact.full_name}</h3>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-xs sm:text-sm text-ink truncate">{activeContact.full_name}</h3>
                       {activeContact.role === "teacher" && (
-                        <Link to="/teacher/$id" params={{ id: activeContact.id }} className="text-xs text-brand hover:underline">
-                          View Tutor Profile
+                        <Link to="/teacher/$id" params={{ id: activeContact.id }} className="text-[11px] text-brand hover:underline block truncate">
+                          View Tutor Profile →
                         </Link>
                       )}
                     </div>
@@ -263,9 +278,9 @@ function MessagesPage() {
                 </div>
 
                 {/* Messages List */}
-                <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-surface/30">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-3 sm:space-y-4 bg-surface/30">
                   {messages.length === 0 && (
-                    <div className="py-12 text-center text-sm text-muted-foreground">
+                    <div className="py-12 text-center text-xs sm:text-sm text-muted-foreground">
                       No messages in this chat yet. Say hello! 👋
                     </div>
                   )}
@@ -276,13 +291,13 @@ function MessagesPage() {
                       (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() < 60000);
                     
                     return (
-                      <div key={msg.id || index} className={`flex ${isMe ? "justify-end" : "justify-start"} ${isConsecutive ? "mt-1" : "mt-4"}`}>
-                        <div className={`max-w-[70%] px-4 py-2.5 shadow-sm relative group ${
+                      <div key={msg.id || index} className={`flex ${isMe ? "justify-end" : "justify-start"} ${isConsecutive ? "mt-1" : "mt-3 sm:mt-4"}`}>
+                        <div className={`max-w-[85%] sm:max-w-[70%] px-3.5 sm:px-4 py-2 sm:py-2.5 shadow-sm relative group ${
                           isMe 
                             ? `bg-brand text-primary-foreground ${isConsecutive ? "rounded-2xl rounded-tr-sm" : "rounded-2xl rounded-br-sm"}` 
                             : `bg-card border border-border ${isConsecutive ? "rounded-2xl rounded-tl-sm" : "rounded-2xl rounded-bl-sm"}`
                         }`}>
-                          <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+                          <p className="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed break-words">{msg.content}</p>
                           <div className={`flex items-center justify-end gap-1 mt-1 ${isMe ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
                             <p className="text-[9px]">
                               {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -296,30 +311,30 @@ function MessagesPage() {
                 </div>
 
                 {/* Input Area */}
-                <div className="border-t border-border p-6 bg-card">
-                  <form onSubmit={sendMessage} className="flex gap-3">
+                <div className="border-t border-border p-3 sm:p-4 bg-card shrink-0">
+                  <form onSubmit={sendMessage} className="flex gap-2 sm:gap-3">
                     <input
                       type="text"
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       placeholder="Type a message..."
-                      className="flex-1 rounded-full border border-border bg-surface px-6 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand"
+                      className="flex-1 rounded-full border border-border bg-surface px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-brand"
                     />
-                    <Button type="submit" disabled={!newMessage.trim() || sending} className="rounded-full bg-brand px-8 font-semibold">
-                      {sending ? "Sending..." : "Send"}
+                    <Button type="submit" disabled={!newMessage.trim() || sending} className="rounded-full bg-brand px-5 sm:px-7 text-xs sm:text-sm font-semibold shrink-0">
+                      {sending ? "..." : "Send"}
                     </Button>
                   </form>
                 </div>
               </>
             ) : (
               <div className="flex h-full flex-col items-center justify-center text-center p-8">
-                <div className="flex size-20 items-center justify-center rounded-full bg-secondary text-brand mb-4">
-                  <svg className="size-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="flex size-16 sm:size-20 items-center justify-center rounded-full bg-secondary text-brand mb-4">
+                  <svg className="size-8 sm:size-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                   </svg>
                 </div>
-                <h3 className="font-serif text-2xl">Your Messages</h3>
-                <p className="mt-2 max-w-sm text-sm text-muted-foreground">Select a conversation from the sidebar or start a new one from a tutor's profile.</p>
+                <h3 className="font-serif text-xl sm:text-2xl font-bold text-ink">Your Messages</h3>
+                <p className="mt-1.5 max-w-sm text-xs sm:text-sm text-muted-foreground">Select a conversation to start chatting or message a tutor directly from their profile.</p>
               </div>
             )}
           </div>
