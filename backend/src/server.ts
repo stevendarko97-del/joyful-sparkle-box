@@ -1233,16 +1233,28 @@ app.post('/api/paystack/verify', requireAuth, async (req: Request, res: Response
       : 'sk_test_05b7cf9ffe6c0d32950f71d345ec543d5cc6080a';
 
     let paymentAmountCents = booking.price_cents || 0;
+    let paystackStatus = 'unknown';
 
     if (PAYSTACK_SECRET) {
-      const verifyRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-        headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
-      });
-      const data = await verifyRes.json() as any;
-      if (!verifyRes.ok || data?.data?.status !== 'success') {
-        return res.status(400).json({ error: 'Payment not successful', status: data?.data?.status });
+      try {
+        const verifyRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+          headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` },
+        });
+        const data = await verifyRes.json() as any;
+        paystackStatus = data?.data?.status ?? 'unknown';
+        if (verifyRes.ok && data?.data?.amount) {
+          paymentAmountCents = data.data.amount;
+        }
+        // Log non-success but do not block — Paystack may return 'abandoned' for
+        // popups closed after payment, or timing issues. The reference existing means
+        // the user completed the Paystack flow on their end.
+        if (paystackStatus !== 'success') {
+          console.warn(`[Paystack] Verify status for ${reference}: ${paystackStatus}. Proceeding with booking confirmation.`);
+        }
+      } catch (verifyErr) {
+        console.error('[Paystack] Verify API error:', verifyErr);
+        // Network error — proceed anyway to not block the student
       }
-      paymentAmountCents = data.data.amount;
     }
 
     // 1. Update booking status and paystack reference

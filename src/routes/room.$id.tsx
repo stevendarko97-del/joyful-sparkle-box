@@ -31,13 +31,13 @@ function openPaystackPopup(
   email: string,
   amountCents: number,
   reference: string,
-  onSuccess: () => void,
+  onSuccess: (trxref: string) => void,
   onClose: () => void
 ) {
   const envKey = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY;
   const key = (envKey && envKey !== "pk_test_placeholder") ? envKey : "pk_test_d923dcac32522f2aa54f4f5ceb9efd3d7f4be793";
   if (!key) {
-    onSuccess();
+    onSuccess(reference);
     return;
   }
   const handler = (window as any).PaystackPop?.setup({
@@ -46,11 +46,12 @@ function openPaystackPopup(
     amount: amountCents,
     currency: "GHS",
     ref: reference,
-    callback: () => onSuccess(),
+    callback: (response: { reference: string; trxref: string }) =>
+      onSuccess(response.reference || response.trxref || reference),
     onClose: () => onClose(),
   });
   if (handler) handler.openIframe();
-  else onSuccess();
+  else onSuccess(reference);
 }
 
 function LessonRoom() {
@@ -501,12 +502,12 @@ function LessonRoom() {
       user.email,
       booking.price_cents || 4000,
       reference,
-      async () => {
+      async (trxref: string) => {
         const token = localStorage.getItem("token");
         await fetch(`${BACKEND}/api/paystack/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ reference, booking_id: booking.id }),
+          body: JSON.stringify({ reference: trxref, booking_id: booking.id }),
         }).catch(() => {});
         toast.success("Payment confirmed! Classroom unlocked.");
         // Refresh booking info from server
@@ -518,7 +519,7 @@ function LessonRoom() {
           setBooking(data.booking);
         }
       },
-      () => toast.info("Payment cancelled.")
+      () => toast.info("Payment window closed.")
     );
   };
 

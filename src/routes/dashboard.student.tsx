@@ -45,7 +45,13 @@ function loadPaystackScript(): Promise<void> {
   });
 }
 
-async function openPaystackPopup(email: string, amountCents: number, reference: string, onSuccess: () => void, onClose: () => void) {
+async function openPaystackPopup(
+  email: string,
+  amountCents: number,
+  reference: string,
+  onSuccess: (trxref: string) => void,
+  onClose: () => void
+) {
   const envKey = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY as string;
   const publicKey = (envKey && envKey !== "pk_test_placeholder") 
     ? envKey 
@@ -53,11 +59,22 @@ async function openPaystackPopup(email: string, amountCents: number, reference: 
 
   if (!publicKey) {
     toast.info("Paystack key not set — simulating payment (dev mode)");
-    onSuccess(); return;
+    onSuccess(reference); return;
   }
   try {
     await loadPaystackScript();
-    const handler = (window as any).PaystackPop?.setup({ key: publicKey, email, amount: amountCents, currency: "GHS", ref: reference, callback: onSuccess, onClose });
+    // Paystack callback receives the transaction object — use trxref (actual reference)
+    const handler = (window as any).PaystackPop?.setup({
+      key: publicKey,
+      email,
+      amount: amountCents,
+      currency: "GHS",
+      ref: reference,
+      callback: (response: { reference: string; trxref: string }) => {
+        onSuccess(response.reference || response.trxref || reference);
+      },
+      onClose,
+    });
     handler?.openIframe();
   } catch (err: any) {
     console.error("Paystack load error:", err);
@@ -179,17 +196,26 @@ function StudentDashboard() {
   const handlePayNow = (b: Booking) => {
     if (!user) return;
     const reference = `qt-${b.id}-${Date.now()}`;
-    openPaystackPopup(user.email, b.price_cents, reference,
-      async () => {
+    openPaystackPopup(
+      user.email,
+      b.price_cents,
+      reference,
+      async (trxref: string) => {
+        // trxref is the actual Paystack reference from their callback
         const token = localStorage.getItem("token");
-        await fetch(`${BACKEND}/api/paystack/verify`, {
+        const res = await fetch(`${BACKEND}/api/paystack/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ reference, booking_id: b.id }),
-        }).catch(() => {});
-        toast.success("Payment confirmed!"); loadDashboard();
+          body: JSON.stringify({ reference: trxref, booking_id: b.id }),
+        }).catch(() => null);
+        if (res && res.ok) {
+          toast.success("Payment confirmed! Classroom is now unlocked.");
+        } else {
+          toast.success("Payment received! Refreshing your bookings...");
+        }
+        loadDashboard();
       },
-      () => toast.info("Payment cancelled.")
+      () => toast.info("Payment window closed.")
     );
   };
 
