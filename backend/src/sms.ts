@@ -29,9 +29,9 @@ export async function sendSms(recipientPhone: string, message: string): Promise<
     return false;
   }
 
-  const apiKey = process.env.ARKESEL_API_KEY || 'UmFCR2VPenJtR25ETnBzVVZoTVI';
+  const apiKey = process.env.ARKESEL_API_KEY;
   if (!apiKey) {
-    console.warn('[Arkesel SMS] ARKESEL_API_KEY is not configured');
+    console.warn('[Arkesel SMS] ARKESEL_API_KEY is not configured — SMS skipped');
     return false;
   }
 

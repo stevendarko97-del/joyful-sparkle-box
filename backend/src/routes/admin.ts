@@ -1,0 +1,186 @@
+import { Router, Request, Response } from 'express';
+import { pool } from '../db';
+import { requireAuth, requireAdmin } from '../middleware/auth';
+import { smsLimiter } from '../middleware/rateLimits';
+import { validate, payoutSchema, verificationActionSchema, ticketStatusSchema, smsTestSchema } from '../validation';
+import { createNotification } from '../lib/notifications';
+import { sendSms, sendPayoutRemittedSms, sendSupportResolvedSms } from '../sms';
+
+const router = Router();
+
+// All admin routes require auth + admin role
+router.use(requireAuth, requireAdmin);
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+router.get('/stats', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const [{ rows: userCountRes }, { rows: bookingsRes }] = await Promise.all([
+      pool.query('SELECT count(*) as count FROM profiles'),
+      pool.query('SELECT status, price_cents, paid_out FROM bookings'),
+    ]);
+    const users = parseInt(userCountRes[0].count, 10) || 0;
+    const completed = bookingsRes.filter((b) => b.status === 'completed');
+    const grossRevenueCents = completed.reduce((s, b) => s + (b.price_cents || 0), 0);
+    const adminEarningsCents = Math.floor(grossRevenueCents * 0.15);
+    const tutorEarningsCents = Math.floor(grossRevenueCents * 0.85);
+    const pendingPayoutsCents = completed.filter((b) => !b.paid_out).reduce((s, b) => s + Math.floor((b.price_cents || 0) * 0.85), 0);
+    const completedPayoutsCents = completed.filter((b) => b.paid_out).reduce((s, b) => s + Math.floor((b.price_cents || 0) * 0.85), 0);
+    res.json({ users, bookings: bookingsRes.length, revenueCents: grossRevenueCents, grossRevenueCents, adminEarningsCents, tutorEarningsCents, pendingPayoutsCents, completedPayoutsCents, commissionRate: 15 });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Users / Bookings / Transactions ──────────────────────────────────────────
+router.get('/users', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const { rows } = await pool.query('SELECT id, full_name, created_at FROM profiles ORDER BY created_at DESC LIMIT 20');
+    res.json({ users: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/bookings', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const { rows } = await pool.query('SELECT id, scheduled_at, status, price_cents FROM bookings ORDER BY created_at DESC LIMIT 20');
+    res.json({ bookings: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/transactions', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT t.id, t.booking_id, t.student_id, t.amount_cents, t.currency, t.paystack_reference, t.status,
+             COALESCE(t.transaction_date, t.created_at) as transaction_date, t.created_at,
+             sp.full_name as student_name, tp.full_name as teacher_name
+      FROM transactions t
+      LEFT JOIN bookings b ON t.booking_id = b.id
+      LEFT JOIN profiles sp ON COALESCE(t.student_id, b.student_id) = sp.id
+      LEFT JOIN profiles tp ON b.teacher_id = tp.id
+      ORDER BY COALESCE(t.transaction_date, t.created_at) DESC LIMIT 50
+    `);
+    res.json({ transactions: rows });
+  } catch { res.json({ transactions: [] }); }
+});
+
+// ── Verifications ─────────────────────────────────────────────────────────────
+router.get('/verifications', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.user_id, t.id_document_url, t.qualification_document_url, p.full_name
+       FROM teacher_profiles t JOIN profiles p ON t.user_id = p.id
+       WHERE t.verification_status = 'pending'`
+    );
+    res.json({ pending: rows.map((r) => ({ user_id: r.user_id, id_document_url: r.id_document_url, qualification_document_url: r.qualification_document_url, profiles: { full_name: r.full_name } })) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/verifications/:userId', validate(verificationActionSchema), async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { userId } = req.params;
+    const { approve, notes } = req.body;
+    const status = approve ? 'verified' : 'rejected';
+    const verifiedAt = approve ? new Date().toISOString() : null;
+    await pool.query(
+      `UPDATE teacher_profiles SET verification_status = $1, verified_at = $2, verification_notes = $3 WHERE user_id = $4`,
+      [status, verifiedAt, notes, userId]
+    );
+    res.json({ message: 'Verification status updated' });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Payouts ───────────────────────────────────────────────────────────────────
+router.get('/payouts', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT b.teacher_id, p.full_name, p.phone, SUM(b.price_cents) as total_gross
+      FROM bookings b JOIN profiles p ON b.teacher_id = p.id
+      WHERE b.status = 'completed' AND b.paid_out = false
+      GROUP BY b.teacher_id, p.full_name, p.phone
+    `);
+    res.json({ payouts: rows.map((r) => ({ teacher_id: r.teacher_id, full_name: r.full_name, phone: r.phone, amount_owed_cents: Math.floor(Number(r.total_gross) * 0.85) })) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/payouts', validate(payoutSchema), async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { teacher_id, amount_cents } = req.body;
+    await pool.query('BEGIN');
+    await pool.query("UPDATE bookings SET paid_out = true WHERE teacher_id = $1 AND status = 'completed' AND paid_out = false", [teacher_id]);
+    await pool.query('INSERT INTO payouts (teacher_id, amount_cents) VALUES ($1, $2)', [teacher_id, amount_cents]);
+    await pool.query('COMMIT');
+
+    const payoutGhs = (amount_cents / 100).toFixed(2);
+    await createNotification(teacher_id, 'Mobile Money Payout Processed',
+      `Admin has processed your payout of GHS ${payoutGhs} to your registered Mobile Money number.`, 'payment', '/dashboard/teacher');
+
+    (async () => {
+      try {
+        const { rows: tRows } = await pool.query('SELECT full_name, phone FROM profiles WHERE id = $1', [teacher_id]);
+        if (tRows.length && tRows[0].phone) {
+          await sendPayoutRemittedSms({ teacherPhone: tRows[0].phone, teacherName: tRows[0].full_name, amountGhs: payoutGhs });
+        }
+      } catch (e) { console.error('Payout SMS error:', e); }
+    })();
+
+    res.json({ message: 'Payout recorded and bookings settled' });
+  } catch (err: any) {
+    await pool.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Support Tickets ───────────────────────────────────────────────────────────
+router.get('/tickets', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT st.*, p.full_name as reporter_name, p.role as reporter_role, p.phone as reporter_phone,
+             u.email as reporter_email, b.scheduled_at as booking_scheduled_at, b.price_cents as booking_price_cents
+      FROM support_tickets st
+      JOIN profiles p ON st.reporter_id = p.id
+      LEFT JOIN local_users u ON p.id = u.id
+      LEFT JOIN bookings b ON st.booking_id = b.id
+      ORDER BY CASE WHEN st.status = 'open' THEN 1 WHEN st.status = 'in_progress' THEN 2 ELSE 3 END, st.created_at DESC
+    `);
+    res.json({ tickets: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/tickets/:ticketId/status', validate(ticketStatusSchema), async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { ticketId } = req.params;
+    const { status, resolution_notes } = req.body;
+    const resolvedAt = status === 'resolved' ? new Date().toISOString() : null;
+    const { rows } = await pool.query(
+      `UPDATE support_tickets SET status = $1, resolution_notes = $2, resolved_at = $3 WHERE id = $4 RETURNING *`,
+      [status, resolution_notes || null, resolvedAt, ticketId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
+    const ticket = rows[0];
+    const noteMsg = resolution_notes ? `: "${resolution_notes}"` : '';
+    await createNotification(ticket.reporter_id,
+      `Support Ticket ${status.toUpperCase().replace('_', ' ')}`,
+      `Admin updated your report "${ticket.subject}" to ${status.replace('_', ' ')}${noteMsg}`,
+      'support', '/dashboard');
+
+    if (status === 'resolved') {
+      (async () => {
+        try {
+          const { rows: uRows } = await pool.query('SELECT phone FROM profiles WHERE id = $1', [ticket.reporter_id]);
+          if (uRows.length && uRows[0].phone) await sendSupportResolvedSms({ phone: uRows[0].phone, subject: ticket.subject, resolutionNotes: resolution_notes });
+        } catch (e) { console.error('Support SMS error:', e); }
+      })();
+    }
+
+    res.json({ ticket: rows[0], message: 'Ticket updated' });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ── SMS Test ──────────────────────────────────────────────────────────────────
+router.post('/sms/test', smsLimiter, validate(smsTestSchema), async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { phone, message } = req.body;
+    const success = await sendSms(phone, message);
+    if (success) return res.json({ success: true, message: `SMS sent to ${phone}` });
+    return res.status(500).json({ success: false, error: 'Failed to deliver SMS. Check Arkesel API key and balance.' });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+export default router;

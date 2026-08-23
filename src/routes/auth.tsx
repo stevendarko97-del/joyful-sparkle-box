@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { z } from "zod";
 import { SiteNav } from "@/components/site-nav";
 import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, MailCheck, RefreshCw, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type ExamType = "BECE" | "WASSCE" | "NOV_DEC" | "SHS_REMEDIAL" | "JHS_REMEDIAL";
@@ -22,11 +22,12 @@ const LANGUAGES = ["English", "Twi", "Ga", "Ewe", "Dagbani", "Hausa", "Fante"];
 const searchSchema = z.object({
   mode: z.enum(["login", "signup"]).optional().default("login"),
   role: z.enum(["student", "teacher"]).optional().default("student"),
+  notice: z.enum(["verified", "already_verified"]).optional(),
 });
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
-  validateSearch: (s: { mode?: "login" | "signup"; role?: "student" | "teacher" }): { mode?: "login" | "signup"; role?: "student" | "teacher" } => searchSchema.parse(s),
+  validateSearch: (s: { mode?: "login" | "signup"; role?: "student" | "teacher"; notice?: "verified" | "already_verified" }): { mode?: "login" | "signup"; role?: "student" | "teacher"; notice?: "verified" | "already_verified" } => searchSchema.parse(s),
   head: () => ({ meta: [{ title: "Sign in — Quick Tutor" }] }),
 });
 
@@ -36,14 +37,57 @@ const BACKEND = getBackendUrl();
 
 const fieldClass = "mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand";
 
+// ── Password strength helper ────────────────────────────────────────────────
+type StrengthLevel = 0 | 1 | 2 | 3 | 4;
+
+function getPasswordStrength(pw: string): StrengthLevel {
+  if (!pw) return 0;
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return score as StrengthLevel;
+}
+
+const STRENGTH_LABELS: Record<StrengthLevel, string> = {
+  0: "",
+  1: "Weak",
+  2: "Fair",
+  3: "Good",
+  4: "Strong",
+};
+
+const STRENGTH_COLORS: Record<StrengthLevel, string> = {
+  0: "bg-border",
+  1: "bg-red-500",
+  2: "bg-amber-400",
+  3: "bg-yellow-400",
+  4: "bg-emerald-500",
+};
+
+const STRENGTH_TEXT_COLORS: Record<StrengthLevel, string> = {
+  0: "text-muted-foreground",
+  1: "text-red-500",
+  2: "text-amber-500",
+  3: "text-yellow-500",
+  4: "text-emerald-500",
+};
+
 function AuthPage() {
-  const { mode, role } = Route.useSearch();
+  const { mode, role, notice } = Route.useSearch();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Post-signup: show email verification pending screen
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
+  // Login: track unverified user so they can resend
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [resendBusy, setResendBusy] = useState(false);
 
   const setMode = (m: "login" | "signup") =>
     navigate({ search: (prev: any) => ({ ...prev, mode: m }) });
@@ -84,6 +128,12 @@ function AuthPage() {
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
+    setUnverifiedEmail(null);
+    // Block weak passwords on signup
+    if (mode === "signup" && getPasswordStrength(password) < 2) {
+      toast.error("Please choose a stronger password (at least 8 characters with a mix of letters and numbers).");
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "signup") {
@@ -125,9 +175,12 @@ function AuthPage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Signup failed");
-        localStorage.setItem("token", data.token);
-        toast.success("Account created!");
-        navigate({ to: role === "teacher" ? "/dashboard/teacher" : "/dashboard/student" });
+        // Backend returns pending verification — show confirmation screen
+        if (data.message === "signup_pending_verification") {
+          setVerificationEmail(data.email ?? email);
+          setVerificationSent(true);
+          return;
+        }
       } else {
         const res = await fetch(`${BACKEND}/api/auth/login`, {
           method: "POST",
@@ -135,6 +188,10 @@ function AuthPage() {
           body: JSON.stringify({ email, password }),
         });
         const data = await res.json();
+        if (res.status === 403 && data.error === "email_not_verified") {
+          setUnverifiedEmail(data.email ?? email);
+          return;
+        }
         if (!res.ok) throw new Error(data.error ?? "Login failed");
         localStorage.setItem("token", data.token);
         toast.success("Welcome back!");
@@ -147,6 +204,70 @@ function AuthPage() {
     }
   };
 
+  const handleResendVerification = async (emailToResend: string) => {
+    setResendBusy(true);
+    try {
+      await fetch(`${BACKEND}/api/auth/resend-verification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailToResend }),
+      });
+      toast.success("Verification email resent! Check your inbox.");
+    } catch {
+      toast.error("Could not resend. Please try again.");
+    } finally {
+      setResendBusy(false);
+    }
+  };
+
+  // ── Computed ─────────────────────────────────────────────────────────────
+  const strength = mode === "signup" ? getPasswordStrength(password) : 0;
+
+  // ── Post-signup: Email verification pending screen ────────────────────────
+  if (verificationSent) {
+    return (
+      <div className="min-h-screen bg-surface">
+        <SiteNav />
+        <div className="mx-auto max-w-md px-6 py-16 text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-brand/10">
+            <MailCheck className="h-10 w-10 text-brand" />
+          </div>
+          <h1 className="font-serif text-3xl leading-tight">Check your inbox!</h1>
+          <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+            We sent a verification link to{" "}
+            <span className="font-semibold text-ink">{verificationEmail}</span>.
+            <br />
+            Please click the link in that email to activate your account before logging in.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">The link expires in 24 hours. Check your spam folder if you don't see it.</p>
+
+          <div className="mt-8 space-y-3">
+            <button
+              id="resend-verification-btn"
+              type="button"
+              onClick={() => handleResendVerification(verificationEmail)}
+              disabled={resendBusy}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-3 text-sm font-semibold text-ink transition-colors hover:bg-secondary disabled:opacity-60"
+            >
+              <RefreshCw className={`size-4 ${resendBusy ? "animate-spin" : ""}`} />
+              {resendBusy ? "Sending..." : "Resend verification email"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setVerificationSent(false); navigate({ search: (prev: any) => ({ ...prev, mode: "login" }) }); }}
+              className="w-full rounded-xl bg-brand py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand/90"
+            >
+              Go to Sign in
+            </button>
+          </div>
+          <p className="mt-6 text-xs text-muted-foreground">
+            <Link to="/" className="hover:text-ink">← Back home</Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-surface">
       <SiteNav />
@@ -155,6 +276,24 @@ function AuthPage() {
         <p className="mt-2 text-sm text-muted-foreground">
           {mode === "signup" ? "Create your account in seconds." : "Sign in to continue."}
         </p>
+
+        {/* Email verified notice banner */}
+        {notice === "verified" && (
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+            <ShieldCheck className="size-5 shrink-0 text-emerald-500" />
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+              ✅ Email verified! You can now sign in.
+            </p>
+          </div>
+        )}
+        {notice === "already_verified" && (
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3">
+            <ShieldCheck className="size-5 shrink-0 text-brand" />
+            <p className="text-sm font-medium text-brand">
+              Your email is already verified. Sign in below.
+            </p>
+          </div>
+        )}
 
         {/* Mode Switcher Tabs (Sign in vs Create Account) */}
         <div className="mt-6 grid grid-cols-2 gap-1.5 rounded-2xl bg-secondary/80 p-1 border border-border">
@@ -255,6 +394,27 @@ function AuthPage() {
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>
+
+            {/* Password strength bar — signup only */}
+            {mode === "signup" && password.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <div className="flex gap-1">
+                  {([1, 2, 3, 4] as StrengthLevel[]).map((bar) => (
+                    <div
+                      key={bar}
+                      className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                        strength >= bar ? STRENGTH_COLORS[strength] : "bg-border"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className={`text-xs font-medium transition-colors ${STRENGTH_TEXT_COLORS[strength]}`}>
+                  {strength > 0 && `Password strength: ${STRENGTH_LABELS[strength]}`}
+                  {strength < 2 && strength > 0 && " — add uppercase letters, numbers, or symbols"}
+                </p>
+              </div>
+            )}
+
             {mode === "login" && (
               <div className="mt-2 text-right">
                 <Link to="/forgot-password" className="text-sm font-medium text-brand hover:underline">
@@ -263,6 +423,26 @@ function AuthPage() {
               </div>
             )}
           </div>
+
+          {/* Email not verified — login error */}
+          {mode === "login" && unverifiedEmail && (
+            <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 space-y-2">
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">📧 Email not verified</p>
+              <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
+                You need to verify your email address before signing in. Check your inbox for the verification link.
+              </p>
+              <button
+                id="login-resend-verification-btn"
+                type="button"
+                onClick={() => handleResendVerification(unverifiedEmail)}
+                disabled={resendBusy}
+                className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline disabled:opacity-60"
+              >
+                <RefreshCw className={`size-3 ${resendBusy ? "animate-spin" : ""}`} />
+                {resendBusy ? "Sending..." : "Resend verification email"}
+              </button>
+            </div>
+          )}
 
           {/* Student details */}
           {mode === "signup" && role === "student" && (
