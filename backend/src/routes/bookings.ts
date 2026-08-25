@@ -168,7 +168,7 @@ router.post('/student/bookings/:id/review', requireAuth, async (req: Request, re
 });
 
 // ── Teacher: Update Booking Status ────────────────────────────────────────────
-router.patch('/teacher/bookings/:id/status', requireAuth, async (req: Request, res: Response): Promise<any> => {
+const handleBookingStatusUpdate = async (req: Request, res: Response): Promise<any> => {
   try {
     const userId = (req as any).user.id;
     const { status } = req.body;
@@ -204,7 +204,10 @@ router.patch('/teacher/bookings/:id/status', requireAuth, async (req: Request, r
 
     res.json({ message: 'Status updated' });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
-});
+};
+
+router.patch('/teacher/bookings/:id/status', requireAuth, handleBookingStatusUpdate);
+router.put('/teacher/bookings/:id/status', requireAuth, handleBookingStatusUpdate);
 
 // ── Favorites ─────────────────────────────────────────────────────────────────
 router.get('/student/favorites', requireAuth, async (req: Request, res: Response): Promise<any> => {

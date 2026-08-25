@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db';
+import { requireAuth } from '../middleware/auth';
+import { validate, teacherAvailabilitySchema, teacherProfileSchema } from '../validation';
 
 const router = Router();
 
@@ -34,7 +36,7 @@ router.get('/teachers', async (req: Request, res: Response): Promise<any> => {
       FROM teacher_profiles t
       LEFT JOIN profiles p ON t.user_id = p.id
       LEFT JOIN subjects s ON t.primary_subject_id = s.id
-      WHERE t.is_active = true
+      WHERE t.is_active = true AND t.verification_status = 'verified'
     `;
     const params: any[] = [];
     let i = 1;
@@ -93,6 +95,10 @@ router.get('/teachers/:id', async (req: Request, res: Response): Promise<any> =>
     ]);
     if (!tp.length) return res.status(404).json({ error: 'Teacher not found' });
     const t = tp[0];
+    // Only verified teachers are visible publicly; non-verified are accessible only to themselves
+    if (t.verification_status !== 'verified') {
+      return res.status(404).json({ error: 'Teacher not found or not yet verified' });
+    }
     const totalStars = ratings.reduce((sum, r) => sum + (Number(r.stars) || 0), 0);
     const reviewCount = ratings.length;
     const avgStars = reviewCount > 0 ? Number((totalStars / reviewCount).toFixed(1)) : null;
@@ -126,6 +132,117 @@ router.get('/teacher/:id/bookings-taken', async (req: Request, res: Response): P
     );
     res.json({ taken: rows });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/teacher/availability
+router.put('/teacher/availability', requireAuth, validate(teacherAvailabilitySchema), async (req: Request, res: Response): Promise<any> => {
+  const client = await pool.connect();
+  try {
+    const userId = (req as any).user.id;
+    const rawAvailability = req.body.availability || [];
+
+    await client.query('BEGIN');
+    await client.query('DELETE FROM teacher_availability WHERE teacher_id = $1', [userId]);
+
+    const seen = new Set<string>();
+    for (const slot of rawAvailability) {
+      const day = Number(slot.day_of_week);
+      const start = Number(slot.start_hour);
+      const end = Number(slot.end_hour);
+      const key = `${day}-${start}`;
+
+      if (start < end && day >= 0 && day <= 6 && !seen.has(key)) {
+        seen.add(key);
+        await client.query(
+          `INSERT INTO teacher_availability (teacher_id, day_of_week, start_hour, end_hour)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (teacher_id, day_of_week, start_hour)
+           DO UPDATE SET end_hour = EXCLUDED.end_hour`,
+          [userId, day, start, end]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Availability schedule saved successfully', count: seen.size });
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// PUT /api/teacher/profile
+router.put('/teacher/profile', requireAuth, validate(teacherProfileSchema), async (req: Request, res: Response): Promise<any> => {
+  const client = await pool.connect();
+  try {
+    const userId = (req as any).user.id;
+    const { headline, bio, phone, rate, years, primarySubject, location, examTypes, selectedTopics, specialties } = req.body;
+
+    await client.query('BEGIN');
+
+    // 1. Update profiles table (bio, phone)
+    await client.query(
+      `UPDATE profiles SET bio = COALESCE($1, bio), phone = COALESCE($2, phone) WHERE id = $3`,
+      [bio || null, phone || null, userId]
+    );
+
+    // 2. Upsert teacher_profiles table
+    const hourlyRateCents = rate !== undefined && rate !== null ? Math.round(Number(rate) * 100) : 4000;
+    const primarySubUuid = primarySubject && primarySubject !== '' ? primarySubject : null;
+
+    await client.query(
+      `INSERT INTO teacher_profiles (user_id, headline, hourly_rate_cents, years_experience, primary_subject_id, location, exam_types)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+       ON CONFLICT (user_id) DO UPDATE SET
+         headline = EXCLUDED.headline,
+         hourly_rate_cents = EXCLUDED.hourly_rate_cents,
+         years_experience = EXCLUDED.years_experience,
+         primary_subject_id = EXCLUDED.primary_subject_id,
+         location = EXCLUDED.location,
+         exam_types = EXCLUDED.exam_types`,
+      [userId, headline || null, hourlyRateCents, years || 0, primarySubUuid, location || null, JSON.stringify(examTypes || [])]
+    );
+
+    // 3. Update teacher_topics
+    await client.query('DELETE FROM teacher_topics WHERE teacher_id = $1', [userId]);
+    if (Array.isArray(selectedTopics) && selectedTopics.length > 0) {
+      const specSet = new Set(specialties || []);
+      for (const topicId of selectedTopics) {
+        const isSpecialty = specSet.has(topicId);
+        await client.query(
+          `INSERT INTO teacher_topics (teacher_id, topic_id, is_specialty) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+          [userId, topicId, isSpecialty]
+        );
+      }
+    }
+
+    // 4. Update tutor_subjects
+    await client.query('DELETE FROM tutor_subjects WHERE teacher_id = $1', [userId]);
+    if (primarySubUuid) {
+      await client.query(
+        `INSERT INTO tutor_subjects (teacher_id, subject_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [userId, primarySubUuid]
+      );
+    }
+    if (Array.isArray(selectedTopics) && selectedTopics.length > 0) {
+      await client.query(
+        `INSERT INTO tutor_subjects (teacher_id, subject_id)
+         SELECT DISTINCT $1, subject_id FROM topics WHERE id = ANY($2::uuid[])
+         ON CONFLICT DO NOTHING`,
+        [userId, selectedTopics]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Profile updated successfully' });
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
 });
 
 export default router;

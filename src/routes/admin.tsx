@@ -5,7 +5,7 @@ import { SiteNav } from "@/components/site-nav";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Wallet, Users, Calendar, BadgePercent, ArrowUpRight, ShieldCheck, MessageSquareText, Send, CheckCircle2 } from "lucide-react";
+import { TrendingUp, Wallet, Users, Calendar, BadgePercent, ArrowUpRight, ShieldCheck, MessageSquareText, Send, CheckCircle2, BarChart3, UserX, UserCheck, AlertTriangle } from "lucide-react";
 
 type Ticket = {
   id: string;
@@ -58,9 +58,17 @@ function AdminPage() {
     created_at: string;
   }[]>([]);
   const [pendingVerif, setPendingVerif] = useState<{ user_id: string; id_document_url: string | null; qualification_document_url: string | null; profiles: { full_name: string } | null }[]>([]);
-  const [usersList, setUsersList] = useState<{ id: string; full_name: string | null; created_at: string }[]>([]);
+  const [usersList, setUsersList] = useState<{ id: string; full_name: string | null; email: string | null; role: string; suspended: boolean; created_at: string }[]>([]);
   const [payouts, setPayouts] = useState<{ teacher_id: string; full_name: string; phone: string | null; amount_owed_cents: number }[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+
+  // Analytics state
+  const [analytics, setAnalytics] = useState<{
+    monthly: { month: string; revenueCents: number; bookings: number }[];
+    userGrowth: { month: string; users: number }[];
+    topSubjects: { name: string; count: number }[];
+    bookingsByStatus: { status: string; count: number }[];
+  } | null>(null);
 
   // SMS Live Dispatch State
   const [smsPhone, setSmsPhone] = useState("");
@@ -119,6 +127,11 @@ function AdminPage() {
     loadPayouts();
     loadPending();
     loadTickets();
+
+    fetch(`${BACKEND}/api/admin/analytics`, { headers: authHeaders })
+      .then(r => r.json())
+      .then(data => { if (data && !data.error) setAnalytics(data); })
+      .catch(console.error);
   }, [isAdmin]);
 
   const loadTickets = () => {
@@ -217,6 +230,25 @@ function AdminPage() {
       loadTickets();
     } else {
       toast.error("Failed to update ticket status");
+    }
+  };
+
+  const handleSuspendUser = async (userId: string, suspend: boolean) => {
+    const action = suspend ? 'suspend' : 'unsuspend';
+    const userName = usersList.find(u => u.id === userId)?.full_name || 'user';
+    if (!confirm(`Are you sure you want to ${action} ${userName}? ${suspend ? 'They will not be able to log in.' : 'They will regain full access.'}`)) return;
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${BACKEND}/api/admin/users/${userId}/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast.success(data.message);
+      setUsersList(prev => prev.map(u => u.id === userId ? { ...u, suspended: suspend } : u));
+    } else {
+      toast.error(data.error || `Failed to ${action} user`);
     }
   };
 
@@ -355,6 +387,130 @@ function AdminPage() {
             </p>
           </div>
         </div>
+
+        {/* ── Section: Analytics Charts ── */}
+        {analytics && (
+          <section className="mt-8 sm:mt-12">
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="size-9 rounded-xl bg-brand/10 flex items-center justify-center">
+                <BarChart3 className="size-5 text-brand" />
+              </div>
+              <div>
+                <h2 className="font-serif text-xl sm:text-2xl font-bold text-ink">Platform Analytics</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Revenue, bookings & user growth over the last 6 months</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Revenue + Bookings bar chart */}
+              <div className="rounded-2xl bg-card border border-border shadow-sm p-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Monthly Revenue (GHS)</p>
+                {analytics.monthly.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">No completed bookings yet</p>
+                ) : (() => {
+                  const maxRev = Math.max(...analytics.monthly.map(m => m.revenueCents), 1);
+                  return (
+                    <div className="space-y-2.5">
+                      {analytics.monthly.map(m => (
+                        <div key={m.month} className="flex items-center gap-3">
+                          <span className="w-8 text-[11px] font-semibold text-muted-foreground shrink-0">{m.month}</span>
+                          <div className="flex-1 bg-secondary rounded-full h-5 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-700 flex items-center justify-end pr-2"
+                              style={{ width: `${Math.max((m.revenueCents / maxRev) * 100, 4)}%` }}
+                            >
+                              <span className="text-[9px] text-white font-bold whitespace-nowrap">GHS {(m.revenueCents / 100).toFixed(0)}</span>
+                            </div>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground w-10 text-right shrink-0">{m.bookings}b</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* User Growth chart */}
+              <div className="rounded-2xl bg-card border border-border shadow-sm p-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">New User Signups</p>
+                {analytics.userGrowth.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">No signup data yet</p>
+                ) : (() => {
+                  const maxUsers = Math.max(...analytics.userGrowth.map(u => u.users), 1);
+                  return (
+                    <div className="space-y-2.5">
+                      {analytics.userGrowth.map(u => (
+                        <div key={u.month} className="flex items-center gap-3">
+                          <span className="w-8 text-[11px] font-semibold text-muted-foreground shrink-0">{u.month}</span>
+                          <div className="flex-1 bg-secondary rounded-full h-5 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-brand to-brand/70 rounded-full transition-all duration-700 flex items-center justify-end pr-2"
+                              style={{ width: `${Math.max((u.users / maxUsers) * 100, 4)}%` }}
+                            >
+                              <span className="text-[9px] text-white font-bold">{u.users}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Top Subjects chart */}
+              {analytics.topSubjects.length > 0 && (
+                <div className="rounded-2xl bg-card border border-border shadow-sm p-5">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Top Subjects by Bookings</p>
+                  {(() => {
+                    const maxCount = Math.max(...analytics.topSubjects.map(s => s.count), 1);
+                    return (
+                      <div className="space-y-2.5">
+                        {analytics.topSubjects.map((s, i) => (
+                          <div key={s.name} className="flex items-center gap-3">
+                            <span className="w-5 text-[11px] font-bold text-muted-foreground shrink-0">#{i + 1}</span>
+                            <span className="w-36 text-[11px] font-medium text-ink truncate shrink-0">{s.name}</span>
+                            <div className="flex-1 bg-secondary rounded-full h-4 overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-700"
+                                style={{ width: `${Math.max((s.count / maxCount) * 100, 4)}%` }}
+                              />
+                            </div>
+                            <span className="text-[11px] text-muted-foreground w-6 text-right shrink-0">{s.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Bookings by Status donut-style */}
+              {analytics.bookingsByStatus.length > 0 && (
+                <div className="rounded-2xl bg-card border border-border shadow-sm p-5">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">Bookings by Status</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {analytics.bookingsByStatus.map(b => (
+                      <div key={b.status} className={`rounded-xl p-3 border ${
+                        b.status === 'completed' ? 'bg-emerald-50 border-emerald-200' :
+                        b.status === 'confirmed' ? 'bg-blue-50 border-blue-200' :
+                        b.status === 'pending' ? 'bg-amber-50 border-amber-200' :
+                        'bg-red-50 border-red-200'
+                      }`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                          b.status === 'completed' ? 'text-emerald-700' :
+                          b.status === 'confirmed' ? 'text-blue-700' :
+                          b.status === 'pending' ? 'text-amber-700' :
+                          'text-red-700'
+                        }`}>{b.status}</p>
+                        <p className="mt-1 text-2xl font-bold text-ink">{b.count}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* ── Section: Recent Bookings ── */}
         <section className="mt-8 sm:mt-12">
@@ -706,29 +862,96 @@ function AdminPage() {
           </div>
         </section>
 
-        {/* ── Section: Recent Users ── */}
+        {/* ── Section: Users Management ── */}
         <section className="mt-8 sm:mt-12">
-          <h2 className="font-serif text-xl sm:text-2xl font-bold text-ink">Recent Users</h2>
-          <div className="mt-4 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-            <div className="min-w-[450px] sm:min-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+            <div>
+              <h2 className="font-serif text-xl sm:text-2xl font-bold text-ink">User Management</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Manage accounts — suspend users who violate platform policies.</p>
+            </div>
+            <div className="flex gap-2 self-start sm:self-auto">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">
+                {usersList.filter(u => u.suspended).length} Suspended
+              </span>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                {usersList.filter(u => !u.suspended).length} Active
+              </span>
+            </div>
+          </div>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="min-w-[680px] sm:min-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
               <table className="w-full text-sm">
                 <thead className="bg-secondary text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">ID</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Joined</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-card divide-y divide-border">
                   {usersList.map((u) => (
-                    <tr key={u.id} className="hover:bg-secondary/40 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-ink">{u.full_name || "Unknown"}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{u.id.slice(0, 8)}...</td>
-                      <td className="px-4 py-3 text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
+                    <tr key={u.id} className={`hover:bg-secondary/40 transition-colors ${u.suspended ? 'opacity-60' : ''}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-ink">{u.full_name || "Unknown"}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">{u.id.slice(0, 8)}...</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{u.email || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          u.role === 'teacher' ? 'bg-brand/10 text-brand' :
+                          u.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                          'bg-secondary text-muted-foreground'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
+                      <td className="px-4 py-3">
+                        {u.suspended ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                            <AlertTriangle className="size-3" /> Suspended
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                            <CheckCircle2 className="size-3" /> Active
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {u.role !== 'admin' && (
+                          u.suspended ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                              onClick={() => handleSuspendUser(u.id, false)}
+                            >
+                              <UserCheck className="size-3.5" />
+                              Reinstate
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 text-red-600 border-red-300 hover:bg-red-50"
+                              onClick={() => handleSuspendUser(u.id, true)}
+                            >
+                              <UserX className="size-3.5" />
+                              Suspend
+                            </Button>
+                          )
+                        )}
+                        {u.role === 'admin' && (
+                          <span className="text-xs text-muted-foreground font-medium">Admin — protected</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {usersList.length === 0 && (
-                    <tr><td colSpan={3} className="px-4 py-12 text-center text-muted-foreground">No users found</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No users found</td></tr>
                   )}
                 </tbody>
               </table>

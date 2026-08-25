@@ -104,7 +104,7 @@ export function SiteNav() {
         {/* Center Nav Links */}
         <div className="hidden items-center gap-8 text-sm font-medium md:flex">
           <Link
-            to="/teachers"
+            to="/teachers" search={{ q: undefined }}
             className="text-muted-foreground transition-colors hover:text-brand"
             activeProps={{ className: "text-brand font-semibold" }}
           >
@@ -337,7 +337,7 @@ export function SiteNav() {
       {mobileMenuOpen && (
         <div className="border-t border-border bg-surface px-6 py-4 md:hidden fade-in space-y-3">
           <Link
-            to="/teachers"
+            to="/teachers" search={{ q: undefined }}
             onClick={() => setMobileMenuOpen(false)}
             className="block py-2 text-sm font-medium text-ink hover:text-brand"
           >
@@ -440,7 +440,7 @@ export function SiteFooter() {
         <div className="flex flex-wrap justify-center gap-6 text-xs font-medium text-muted-foreground">
           <Link to="/how-it-works" className="hover:text-brand transition-colors">How it Works</Link>
           <Link to="/educators" className="hover:text-brand transition-colors">For Educators</Link>
-          <Link to="/teachers" className="hover:text-brand transition-colors">Find a Tutor</Link>
+          <Link to="/teachers" search={{ q: undefined }} className="hover:text-brand transition-colors">Find a Tutor</Link>
           <Link to="/support" className="hover:text-brand transition-colors font-semibold text-brand">Support &amp; Feedback</Link>
           <Link to="/terms" className="hover:text-brand transition-colors">Terms of Service</Link>
           <Link to="/terms" className="hover:text-brand transition-colors">Policies &amp; Escrow</Link>

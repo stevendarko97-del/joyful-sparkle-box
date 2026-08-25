@@ -91,3 +91,99 @@ export async function sendVerificationEmail(toEmail: string, verificationLink: s
   console.log(`======================================================\n`);
   return false;
 }
+
+export async function sendPaymentReceiptEmail(
+  toEmail: string,
+  details: {
+    studentName: string;
+    teacherName: string;
+    amountGhs: string;
+    reference: string;
+    scheduledAt: string;
+    bookingId: string;
+  }
+): Promise<boolean> {
+  const smtp = createSmtpTransporter();
+  const { studentName, teacherName, amountGhs, reference, scheduledAt, bookingId } = details;
+  const lessonDate = new Date(scheduledAt).toLocaleString('en-GH', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+  const receiptDate = new Date().toLocaleString('en-GH', {
+    year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; border-radius: 12px; overflow: hidden; border: 1px solid #eee;">
+      <div style="background: linear-gradient(135deg, #7b1113, #a31f22); padding: 28px 32px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: bold;">QuickTutor Ghana</h1>
+        <p style="color: rgba(255,255,255,0.8); margin: 6px 0 0; font-size: 14px;">Payment Receipt</p>
+      </div>
+      <div style="padding: 28px 32px; background: #ffffff;">
+        <p style="color: #333; font-size: 15px; margin: 0 0 6px;">Hello <strong>${studentName}</strong>,</p>
+        <p style="color: #555; font-size: 14px; margin: 0 0 24px;">Your payment was successful! Here's your receipt for the lesson booking.</p>
+
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin-bottom: 24px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 10px 0; color: #6b7280; font-size: 13px; border-bottom: 1px solid #e5e7eb;">Receipt Date</td>
+              <td style="padding: 10px 0; color: #111827; font-size: 13px; font-weight: 600; text-align: right; border-bottom: 1px solid #e5e7eb;">${receiptDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; color: #6b7280; font-size: 13px; border-bottom: 1px solid #e5e7eb;">Tutor</td>
+              <td style="padding: 10px 0; color: #111827; font-size: 13px; font-weight: 600; text-align: right; border-bottom: 1px solid #e5e7eb;">${teacherName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; color: #6b7280; font-size: 13px; border-bottom: 1px solid #e5e7eb;">Lesson Date &amp; Time</td>
+              <td style="padding: 10px 0; color: #111827; font-size: 13px; font-weight: 600; text-align: right; border-bottom: 1px solid #e5e7eb;">${lessonDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; color: #6b7280; font-size: 13px; border-bottom: 1px solid #e5e7eb;">Transaction Reference</td>
+              <td style="padding: 10px 0; font-size: 12px; font-family: monospace; color: #4f46e5; font-weight: 600; text-align: right; border-bottom: 1px solid #e5e7eb;">${reference}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; color: #6b7280; font-size: 13px; border-bottom: 1px solid #e5e7eb;">Booking ID</td>
+              <td style="padding: 10px 0; font-size: 11px; font-family: monospace; color: #9ca3af; text-align: right; border-bottom: 1px solid #e5e7eb;">${bookingId}</td>
+            </tr>
+            <tr>
+              <td style="padding: 14px 0 0; color: #111827; font-size: 15px; font-weight: bold;">Amount Paid</td>
+              <td style="padding: 14px 0 0; font-size: 18px; font-weight: bold; color: #15803d; text-align: right;">GHS ${amountGhs}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 18px; margin-bottom: 24px;">
+          <p style="margin: 0; color: #15803d; font-size: 13px; font-weight: 600;">✅ Payment Confirmed &amp; Booking Active</p>
+          <p style="margin: 6px 0 0; color: #166534; font-size: 12px;">Your lesson is confirmed. You can access the session room from your student dashboard.</p>
+        </div>
+
+        <p style="color: #9ca3af; font-size: 12px; margin: 0; border-top: 1px solid #f3f4f6; padding-top: 16px;">
+          If you have any questions or concerns, please contact us via the support section on your dashboard.<br/>
+          <strong>QuickTutor Ghana</strong> — Connecting Students with Expert Tutors
+        </p>
+      </div>
+    </div>
+  `;
+
+  if (smtp) {
+    try {
+      await smtp.transporter.sendMail({
+        from: smtp.from,
+        to: toEmail,
+        subject: `QuickTutor Ghana — Payment Receipt (GHS ${amountGhs})`,
+        text: `Hello ${studentName},\n\nYour payment of GHS ${amountGhs} for a lesson with ${teacherName} on ${lessonDate} was successful.\n\nTransaction Reference: ${reference}\nBooking ID: ${bookingId}\n\nYou can access your lesson room from your student dashboard.\n\nThank you,\nQuickTutor Ghana Team`,
+        html: htmlBody,
+      });
+      console.log(`[Email] ✅ Payment receipt sent to ${toEmail}`);
+      return true;
+    } catch (err) {
+      console.error(`[Email] ❌ Failed to send receipt to ${toEmail}:`, err);
+    }
+  }
+
+  console.log(`\n======================================================`);
+  console.log(`🧾 PAYMENT RECEIPT for ${toEmail}: GHS ${amountGhs} — Ref: ${reference}`);
+  console.log(`======================================================\n`);
+  return false;
+}

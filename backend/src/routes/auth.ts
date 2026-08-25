@@ -152,8 +152,12 @@ router.post('/login', authLimiter, validate(loginSchema), async (req: Request, r
     if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
     if (!user.email_verified) return res.status(403).json({ error: 'email_not_verified', email: user.email });
 
-    const profileRes = await pool.query('SELECT role FROM profiles WHERE id = $1', [user.id]);
-    const role = profileRes.rows[0]?.role || 'student';
+    const profileRes = await pool.query('SELECT role, suspended FROM profiles WHERE id = $1', [user.id]);
+    const profile = profileRes.rows[0];
+    const role = profile?.role || 'student';
+    if (profile?.suspended) {
+      return res.status(403).json({ error: 'account_suspended' });
+    }
     const token = jwt.sign({ id: user.id, role, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
     return res.json({ message: 'Login successful', token, user: { id: user.id, email: user.email, role } });

@@ -127,6 +127,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
     await pool.query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT;');
     await pool.query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT;');
+    await pool.query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT false;');
     await pool.query(`
       ALTER TABLE teacher_profiles
       ADD COLUMN IF NOT EXISTS hourly_rate_cents INTEGER DEFAULT 4000,
@@ -150,6 +151,21 @@ app.get('/api/health', (_req: Request, res: Response) => {
         teacher_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (student_id, teacher_id)
+      );
+      CREATE TABLE IF NOT EXISTS teacher_availability (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        teacher_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+        day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+        start_hour INTEGER NOT NULL CHECK (start_hour BETWEEN 0 AND 23),
+        end_hour INTEGER NOT NULL CHECK (end_hour BETWEEN 0 AND 24),
+        UNIQUE(teacher_id, day_of_week, start_hour)
+      );
+      CREATE TABLE IF NOT EXISTS teacher_topics (
+        teacher_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+        topic_id UUID REFERENCES topics(id) ON DELETE CASCADE,
+        is_specialty BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (teacher_id, topic_id)
       );
     `);
     await pool.query(`

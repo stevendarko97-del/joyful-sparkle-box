@@ -317,7 +317,7 @@ function StudentDashboard() {
                 <Calendar className="size-8 opacity-50" />
               </div>
               <p className="text-sm text-muted-foreground">No sessions found.</p>
-              <Link to="/teachers" className="mt-4 inline-block h-10 rounded-full bg-brand px-6 text-sm font-semibold leading-10 text-primary-foreground hover:bg-brand/90 hover:scale-105 transition-all duration-300 shadow-md">
+              <Link to="/teachers" search={{ q: undefined }} className="mt-4 inline-block h-10 rounded-full bg-brand px-6 text-sm font-semibold leading-10 text-primary-foreground hover:bg-brand/90 hover:scale-105 transition-all duration-300 shadow-md">
                 Find a tutor
               </Link>
             </div>
@@ -465,7 +465,7 @@ function StudentDashboard() {
         {/* Browse CTA */}
         <div className="mt-6 rounded-2xl bg-secondary p-6 text-center">
           <p className="text-sm text-muted-foreground">Looking for more tutors?</p>
-          <Link to="/teachers" className="mt-3 inline-block h-10 rounded-full bg-brand px-6 text-sm font-semibold leading-10 text-primary-foreground hover:bg-brand/90 transition-colors">
+          <Link to="/teachers" search={{ q: undefined }} className="mt-3 inline-block h-10 rounded-full bg-brand px-6 text-sm font-semibold leading-10 text-primary-foreground hover:bg-brand/90 transition-colors">
             Browse All Tutors
           </Link>
         </div>

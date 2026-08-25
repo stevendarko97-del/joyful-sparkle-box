@@ -96,7 +96,7 @@ function TeacherDetail() {
           <div>
             <h1 className="font-serif text-4xl">Tutor not found</h1>
             <p className="mt-2 text-muted-foreground">This profile doesn't exist or has been removed.</p>
-            <Link to="/teachers" className="mt-6 inline-block h-10 rounded-full bg-brand px-5 text-sm font-medium leading-10 text-primary-foreground">Browse tutors</Link>
+            <Link to="/teachers" search={{ q: undefined }} className="mt-6 inline-block h-10 rounded-full bg-brand px-5 text-sm font-medium leading-10 text-primary-foreground">Browse tutors</Link>
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ function TeacherDetail() {
       {/* Hero banner */}
       <section className="bg-ink py-16">
         <div className="mx-auto max-w-7xl px-6">
-          <Link to="/teachers" className="text-sm text-primary-foreground/50 hover:text-primary-foreground/80 transition-colors">← Back to tutors</Link>
+          <Link to="/teachers" search={{ q: undefined }} className="text-sm text-primary-foreground/50 hover:text-primary-foreground/80 transition-colors">← Back to tutors</Link>
           <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start">
             {/* Avatar */}
             <div className="size-24 shrink-0 rounded-2xl overflow-hidden border-2 border-white/10 bg-brand flex items-center justify-center text-3xl font-bold text-primary-foreground">

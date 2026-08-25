@@ -76,7 +76,7 @@ const STRENGTH_TEXT_COLORS: Record<StrengthLevel, string> = {
 
 function AuthPage() {
   const { mode, role, notice } = Route.useSearch();
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -90,9 +90,9 @@ function AuthPage() {
   const [resendBusy, setResendBusy] = useState(false);
 
   const setMode = (m: "login" | "signup") =>
-    navigate({ search: (prev: any) => ({ ...prev, mode: m }) });
+    navigate({ search: (prev) => ({ ...prev, mode: m }) });
   const setRole = (r: "student" | "teacher") =>
-    navigate({ search: (prev: any) => ({ ...prev, role: r }) });
+    navigate({ search: (prev) => ({ ...prev, role: r }) });
 
   // Shared extras
   const [phone, setPhone] = useState("");
@@ -137,6 +137,12 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
+        // Certificate is required for teachers
+        if (role === "teacher" && !certificateFile) {
+          toast.error("A teaching certificate or qualification document is required to create a tutor account. Please upload your certificate.");
+          setBusy(false);
+          return;
+        }
         let certificateUrl;
         if (role === "teacher" && certificateFile) {
           const fileExt = certificateFile.name.split('.').pop();
@@ -190,6 +196,10 @@ function AuthPage() {
         const data = await res.json();
         if (res.status === 403 && data.error === "email_not_verified") {
           setUnverifiedEmail(data.email ?? email);
+          return;
+        }
+        if (res.status === 403 && data.error === "account_suspended") {
+          toast.error("Your account has been suspended. Please contact support for assistance.");
           return;
         }
         if (!res.ok) throw new Error(data.error ?? "Login failed");
@@ -254,7 +264,7 @@ function AuthPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setVerificationSent(false); navigate({ search: (prev: any) => ({ ...prev, mode: "login" }) }); }}
+              onClick={() => { setVerificationSent(false); navigate({ search: (prev) => ({ ...prev, mode: "login" }) }); }}
               className="w-full rounded-xl bg-brand py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand/90"
             >
               Go to Sign in
@@ -523,8 +533,15 @@ function AuthPage() {
                 </div>
               </div>
               <div>
-                <label htmlFor="certificate" className="text-sm font-medium">License or Certificate (PDF/Image)</label>
+                <label htmlFor="certificate" className="text-sm font-medium">
+                  License or Certificate (PDF/Image){" "}
+                  <span className="text-red-500 font-bold">*</span>
+                  <span className="ml-1 text-[11px] text-muted-foreground font-normal">(Required to create a tutor account)</span>
+                </label>
                 <input id="certificate" type="file" accept=".pdf,image/*" onChange={e => setCertificateFile(e.target.files?.[0] ?? null)} className="mt-1 block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-secondary file:text-secondary-foreground hover:file:bg-secondary/80" />
+                {!certificateFile && (
+                  <p className="mt-1 text-[11px] text-amber-600 font-medium">⚠ You must upload your teaching certificate to proceed.</p>
+                )}
               </div>
             </div>
           )}

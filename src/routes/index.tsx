@@ -34,7 +34,7 @@ function Index() {
               One-on-one live lessons built on the GES curriculum. Book verified Ghanaian tutors for Core and Elective subjects, pay with Mobile Money, and learn from anywhere in the country.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <Link to="/teachers" className="h-[44px] rounded-full bg-brand px-6 text-base font-medium leading-[44px] text-primary-foreground ring-1 ring-brand transition-transform hover:scale-[1.02]">
+              <Link to="/teachers" search={{ q: undefined }} className="h-[44px] rounded-full bg-brand px-6 text-base font-medium leading-[44px] text-primary-foreground ring-1 ring-brand transition-transform hover:scale-[1.02]">
                 Find a tutor
               </Link>
               <Link
@@ -209,7 +209,7 @@ function Index() {
               Start Learning Today
             </Link>
             <Link
-              to="/teachers"
+              to="/teachers" search={{ q: undefined }}
               className="h-[48px] rounded-full border border-white/20 px-8 text-base font-medium leading-[48px] text-primary-foreground/80 transition-colors hover:bg-white/10"
             >
               Browse All Tutors

@@ -29,7 +29,7 @@ function Educators() {
               <Link to="/auth" search={{ mode: "signup", role: "teacher" }} className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm shadow-brand/10 transition hover:opacity-95">
                 Start teaching
               </Link>
-              <Link to="/teachers" className="inline-flex items-center justify-center rounded-full border border-border bg-card px-6 py-3 text-sm font-semibold text-ink transition hover:bg-secondary">
+              <Link to="/teachers" search={{ q: undefined }} className="inline-flex items-center justify-center rounded-full border border-border bg-card px-6 py-3 text-sm font-semibold text-ink transition hover:bg-secondary">
                 View teacher marketplace
               </Link>
             </div>
@@ -103,7 +103,7 @@ function Educators() {
             <Link to="/auth" search={{ mode: "signup", role: "teacher" }} className="inline-flex items-center justify-center rounded-full bg-brand px-8 py-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95">
               Create educator account
             </Link>
-            <Link to="/teachers" className="inline-flex items-center justify-center rounded-full border border-border bg-surface px-8 py-4 text-sm font-semibold text-ink transition hover:bg-secondary">
+            <Link to="/teachers" search={{ q: undefined }} className="inline-flex items-center justify-center rounded-full border border-border bg-surface px-8 py-4 text-sm font-semibold text-ink transition hover:bg-secondary">
               Browse student demand
             </Link>
           </div>

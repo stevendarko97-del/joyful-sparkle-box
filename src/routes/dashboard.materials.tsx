@@ -50,7 +50,7 @@ function MaterialsDashboard() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      if (data) setMaterials(data as Material[]);
+      if (data) setMaterials(data as unknown as Material[]);
     } catch (err: any) {
       console.error(err.message);
     } finally {

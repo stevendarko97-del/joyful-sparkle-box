@@ -239,19 +239,32 @@ function TeacherDashboard() {
   };
 
   const saveAvailability = async () => {
+    for (const slot of availability) {
+      if (slot.start_hour >= slot.end_hour) {
+        toast.error(`Invalid time range on ${DAYS[slot.day_of_week] || 'selected day'}: start hour must be earlier than end hour.`);
+        return;
+      }
+    }
+
     setSaving(true);
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${BACKEND}/api/teacher/availability`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ availability }),
-    });
-    setSaving(false);
-    if (res.ok) {
-      toast.success("Availability schedule saved!");
-      loadDashboard();
-    } else {
-      toast.error("Failed to save availability");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${BACKEND}/api/teacher/availability`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ availability }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success("Availability schedule saved!");
+        loadDashboard();
+      } else {
+        toast.error(data.error || "Failed to save availability");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Network error saving availability");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -762,6 +775,68 @@ function TeacherDashboard() {
             );
           })}
         </div>
+
+        {/* ── Verification Status Banner ── */}
+        {dashData?.teacherProfile && dashData.teacherProfile.verification_status !== 'verified' && (
+          <div className={`mb-6 rounded-2xl border-2 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start gap-4 ${
+            dashData.teacherProfile.verification_status === 'rejected'
+              ? 'bg-red-50 border-red-300'
+              : 'bg-amber-50 border-amber-300'
+          }`}>
+            <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${
+              dashData.teacherProfile.verification_status === 'rejected'
+                ? 'bg-red-100 text-red-600'
+                : 'bg-amber-100 text-amber-600'
+            }`}>
+              {dashData.teacherProfile.verification_status === 'rejected'
+                ? <XCircle className="size-5" />
+                : <Clock className="size-5" />
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-bold ${
+                dashData.teacherProfile.verification_status === 'rejected' ? 'text-red-800' : 'text-amber-800'
+              }`}>
+                {dashData.teacherProfile.verification_status === 'rejected'
+                  ? '❌ Certificate Verification Rejected'
+                  : '⏳ Certificate Pending Admin Verification'
+                }
+              </p>
+              <p className={`mt-1 text-xs leading-relaxed ${
+                dashData.teacherProfile.verification_status === 'rejected' ? 'text-red-700' : 'text-amber-700'
+              }`}>
+                {dashData.teacherProfile.verification_status === 'rejected'
+                  ? 'Your certificate was not accepted. You are currently not visible to students. Please upload a valid teaching certificate or qualification document in your Profile tab, then contact support for re-review.'
+                  : 'Your profile and certificate are under review by our admin team. You will not appear in student searches until your certificate is verified. This usually takes 1–2 business days.'
+                }
+              </p>
+              {dashData.teacherProfile.verification_status === 'rejected' && (
+                <button
+                  onClick={() => setTab('profile')}
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-red-700 hover:text-red-900 hover:underline"
+                >
+                  <Settings className="size-3.5" />
+                  Update certificate in Profile →
+                </button>
+              )}
+            </div>
+            <div className={`self-start sm:self-center shrink-0 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+              dashData.teacherProfile.verification_status === 'rejected'
+                ? 'bg-red-100 text-red-700 border-red-300'
+                : 'bg-amber-100 text-amber-700 border-amber-300'
+            }`}>
+              {dashData.teacherProfile.verification_status === 'rejected' ? 'Rejected' : 'Pending Review'}
+            </div>
+          </div>
+        )}
+        {dashData?.teacherProfile?.verification_status === 'verified' && (
+          <div className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 p-3.5 flex items-center gap-3">
+            <CheckCircle className="size-5 text-emerald-600 shrink-0" />
+            <p className="text-xs font-semibold text-emerald-700">
+              ✅ Certificate verified — your profile is live and visible to students.
+            </p>
+          </div>
+        )}
 
         {/* ── Stat Cards Grid (Mobile 2-cols, Desktop 4-cols) ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">

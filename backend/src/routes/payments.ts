@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth';
 import { validate, paystackInitSchema, paystackVerifySchema, ratingSchema } from '../validation';
 import { createNotification } from '../lib/notifications';
 import { sendPaymentConfirmedSms, sendAdminPaymentAlertSms } from '../sms';
+import { sendPaymentReceiptEmail } from '../email';
 
 const router = Router();
 
@@ -123,6 +124,27 @@ router.post('/verify', requireAuth, validate(paystackVerifySchema), async (req: 
         } catch (e) { console.error('Error sending payment confirmation SMS:', e); }
       })();
     }
+
+    // Send payment receipt email to student (best-effort)
+    (async () => {
+      try {
+        const { rows: emailRows } = await pool.query(
+          `SELECT u.email FROM local_users u WHERE u.id = $1`,
+          [booking.student_id]
+        );
+        if (emailRows.length && emailRows[0].email && bRows2.length > 0) {
+          const b2 = bRows2[0];
+          await sendPaymentReceiptEmail(emailRows[0].email, {
+            studentName: b2.student_name,
+            teacherName: b2.teacher_name,
+            amountGhs: (paymentAmountCents / 100).toFixed(2),
+            reference,
+            scheduledAt: b2.scheduled_at,
+            bookingId: booking_id,
+          });
+        }
+      } catch (e) { console.error('[Receipt] Failed to send receipt email:', e); }
+    })();
 
     res.json({ message: 'Payment verified, booking confirmed', confirmed: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }

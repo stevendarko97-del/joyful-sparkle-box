@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../db';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { smsLimiter } from '../middleware/rateLimits';
-import { validate, payoutSchema, verificationActionSchema, ticketStatusSchema, smsTestSchema } from '../validation';
+import { validate, payoutSchema, verificationActionSchema, ticketStatusSchema, smsTestSchema, suspendUserSchema } from '../validation';
 import { createNotification } from '../lib/notifications';
 import { sendSms, sendPayoutRemittedSms, sendSupportResolvedSms } from '../sms';
 
@@ -29,10 +29,80 @@ router.get('/stats', async (_req: Request, res: Response): Promise<any> => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Analytics ──────────────────────────────────────────────────────────────────
+router.get('/analytics', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const revenueRes = await pool.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') as month,
+        DATE_TRUNC('month', created_at) as month_start,
+        SUM(price_cents) as gross_cents,
+        COUNT(*) as booking_count
+      FROM bookings
+      WHERE status = 'completed'
+        AND created_at >= NOW() - INTERVAL '6 months'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY month_start ASC
+    `);
+
+    const usersRes = await pool.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') as month,
+        DATE_TRUNC('month', created_at) as month_start,
+        COUNT(*) as user_count
+      FROM profiles
+      WHERE created_at >= NOW() - INTERVAL '6 months'
+      GROUP BY DATE_TRUNC('month', created_at)
+      ORDER BY month_start ASC
+    `);
+
+    const subjectsRes = await pool.query(`
+      SELECT s.name, COUNT(b.id) as booking_count
+      FROM subjects s
+      JOIN bookings b ON b.topic_id IN (
+        SELECT id FROM topics WHERE subject_id = s.id
+      )
+      GROUP BY s.id, s.name
+      ORDER BY booking_count DESC
+      LIMIT 5
+    `).catch(() => ({ rows: [] as any[] }));
+
+    const statusRes = await pool.query(`
+      SELECT status, COUNT(*) as count FROM bookings GROUP BY status
+    `);
+
+    res.json({
+      monthly: revenueRes.rows.map(r => ({
+        month: r.month,
+        revenueCents: parseInt(r.gross_cents, 10) || 0,
+        bookings: parseInt(r.booking_count, 10) || 0,
+      })),
+      userGrowth: usersRes.rows.map(r => ({
+        month: r.month,
+        users: parseInt(r.user_count, 10) || 0,
+      })),
+      topSubjects: subjectsRes.rows.map(r => ({
+        name: r.name,
+        count: parseInt(r.booking_count, 10) || 0,
+      })),
+      bookingsByStatus: statusRes.rows.map(r => ({
+        status: r.status,
+        count: parseInt(r.count, 10) || 0,
+      })),
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Users / Bookings / Transactions ──────────────────────────────────────────
 router.get('/users', async (_req: Request, res: Response): Promise<any> => {
   try {
-    const { rows } = await pool.query('SELECT id, full_name, created_at FROM profiles ORDER BY created_at DESC LIMIT 20');
+    const { rows } = await pool.query(`
+      SELECT p.id, p.full_name, p.role, p.suspended, p.created_at, u.email
+      FROM profiles p
+      LEFT JOIN local_users u ON p.id = u.id
+      ORDER BY p.created_at DESC
+      LIMIT 50
+    `);
     res.json({ users: rows });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -60,6 +130,46 @@ router.get('/transactions', async (_req: Request, res: Response): Promise<any> =
   } catch { res.json({ transactions: [] }); }
 });
 
+// ── Suspend / Unsuspend Users ─────────────────────────────────────────────────
+router.post('/users/:userId/suspend', validate(suspendUserSchema), async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = req.params.userId as string;
+    const { reason } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE profiles SET suspended = true WHERE id = $1 RETURNING full_name, role`,
+      [userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    await createNotification(
+      userId,
+      'Account Suspended',
+      `Your account has been suspended${reason ? `: ${reason}` : ' due to a policy violation'}. Please contact support for assistance.`,
+      'support',
+      '/support'
+    );
+    res.json({ message: `${rows[0].full_name} (${rows[0].role}) has been suspended` });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/users/:userId/unsuspend', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = _req.params.userId as string;
+    const { rows } = await pool.query(
+      `UPDATE profiles SET suspended = false WHERE id = $1 RETURNING full_name, role`,
+      [userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    await createNotification(
+      userId,
+      'Account Reinstated',
+      'Your account suspension has been lifted. You can now access all QuickTutor features again.',
+      'support',
+      '/dashboard'
+    );
+    res.json({ message: `${rows[0].full_name} (${rows[0].role}) has been reinstated` });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Verifications ─────────────────────────────────────────────────────────────
 router.get('/verifications', async (_req: Request, res: Response): Promise<any> => {
   try {
@@ -74,7 +184,7 @@ router.get('/verifications', async (_req: Request, res: Response): Promise<any> 
 
 router.put('/verifications/:userId', validate(verificationActionSchema), async (req: Request, res: Response): Promise<any> => {
   try {
-    const { userId } = req.params;
+    const userId = req.params.userId as string;
     const { approve, notes } = req.body;
     const status = approve ? 'verified' : 'rejected';
     const verifiedAt = approve ? new Date().toISOString() : null;
@@ -82,7 +192,24 @@ router.put('/verifications/:userId', validate(verificationActionSchema), async (
       `UPDATE teacher_profiles SET verification_status = $1, verified_at = $2, verification_notes = $3 WHERE user_id = $4`,
       [status, verifiedAt, notes, userId]
     );
-    res.json({ message: 'Verification status updated' });
+    if (approve) {
+      await createNotification(
+        userId,
+        '✅ Certificate Verified — You\'re Now Live!',
+        'Congratulations! Your teaching certificate has been verified by our admin team. Your profile is now visible to students and you can start receiving bookings.',
+        'general',
+        '/dashboard/teacher'
+      );
+    } else {
+      await createNotification(
+        userId,
+        '❌ Certificate Verification Rejected',
+        `Your certificate was not accepted${notes ? `: ${notes}` : ''}. Please upload a valid teaching certificate in your Profile tab and contact support for re-review.`,
+        'support',
+        '/dashboard/teacher'
+      );
+    }
+    res.json({ message: `Verification status updated to ${status}` });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

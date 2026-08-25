@@ -29,7 +29,7 @@ function HowItWorks() {
               Book verified Ghanaian tutors for focused, one-on-one lessons. Below is a quick walkthrough for students and a short section for educators — jump to the educator resources if you're teaching with us.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
-              <Link to="/teachers" className="h-[44px] rounded-full bg-brand px-6 text-base font-medium leading-[44px] text-primary-foreground ring-1 ring-brand">
+              <Link to="/teachers" search={{ q: undefined }} className="h-[44px] rounded-full bg-brand px-6 text-base font-medium leading-[44px] text-primary-foreground ring-1 ring-brand">
                 Find a Teacher
               </Link>
               <a href="#educators" className="h-[44px] rounded-full border border-border bg-card px-6 text-base font-medium leading-[44px] hover:bg-secondary">

@@ -119,6 +119,37 @@ export const smsTestSchema = z.object({
   message: z.string().min(1, 'Message is required').max(160),
 });
 
+export const suspendUserSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+export const teacherAvailabilitySchema = z.object({
+  availability: z.array(
+    z.object({
+      id: z.string().optional(),
+      day_of_week: z.coerce.number().int().min(0).max(6),
+      start_hour: z.coerce.number().int().min(0).max(23),
+      end_hour: z.coerce.number().int().min(1).max(24),
+    }).refine((slot) => slot.start_hour < slot.end_hour, {
+      message: 'Start hour must be before end hour',
+      path: ['end_hour'],
+    })
+  ).optional().default([]),
+});
+
+export const teacherProfileSchema = z.object({
+  headline: z.string().max(300).optional().nullable(),
+  bio: z.string().max(800).optional().nullable(),
+  phone: z.string().max(20).optional().nullable(),
+  rate: z.number().min(0).max(10000).optional().nullable(),
+  years: z.number().int().min(0).max(60).optional().nullable(),
+  primarySubject: z.string().uuid().optional().nullable().or(z.literal('')),
+  location: z.string().max(200).optional().nullable(),
+  examTypes: z.array(z.string()).optional(),
+  selectedTopics: z.array(z.string().uuid()).optional(),
+  specialties: z.array(z.string().uuid()).optional(),
+});
+
 // ── Middleware factory ────────────────────────────────────────────────────────
 /**
  * Returns an Express middleware that validates req.body against the given Zod schema.
