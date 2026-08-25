@@ -130,6 +130,11 @@ app.get('/api/health', (_req: Request, res: Response) => {
     await pool.query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT false;');
     await pool.query(`
       ALTER TABLE teacher_profiles
+      ADD COLUMN IF NOT EXISTS headline TEXT,
+      ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS verification_notes TEXT,
+      ADD COLUMN IF NOT EXISTS id_document_url TEXT,
+      ADD COLUMN IF NOT EXISTS qualification_document_url TEXT,
       ADD COLUMN IF NOT EXISTS hourly_rate_cents INTEGER DEFAULT 4000,
       ADD COLUMN IF NOT EXISTS years_experience INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS location TEXT,

@@ -97,11 +97,13 @@ router.get('/analytics', async (_req: Request, res: Response): Promise<any> => {
 router.get('/users', async (_req: Request, res: Response): Promise<any> => {
   try {
     const { rows } = await pool.query(`
-      SELECT p.id, p.full_name, p.role, p.suspended, p.created_at, u.email
+      SELECT p.id, p.full_name, p.role, p.suspended, p.created_at, u.email,
+             tp.verification_status, tp.hourly_rate_cents
       FROM profiles p
       LEFT JOIN local_users u ON p.id = u.id
+      LEFT JOIN teacher_profiles tp ON p.id = tp.user_id
       ORDER BY p.created_at DESC
-      LIMIT 50
+      LIMIT 100
     `);
     res.json({ users: rows });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -109,7 +111,7 @@ router.get('/users', async (_req: Request, res: Response): Promise<any> => {
 
 router.get('/bookings', async (_req: Request, res: Response): Promise<any> => {
   try {
-    const { rows } = await pool.query('SELECT id, scheduled_at, status, price_cents FROM bookings ORDER BY created_at DESC LIMIT 20');
+    const { rows } = await pool.query('SELECT id, scheduled_at, status, price_cents FROM bookings ORDER BY created_at DESC LIMIT 50');
     res.json({ bookings: rows });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -174,11 +176,12 @@ router.post('/users/:userId/unsuspend', async (_req: Request, res: Response): Pr
 router.get('/verifications', async (_req: Request, res: Response): Promise<any> => {
   try {
     const { rows } = await pool.query(
-      `SELECT t.user_id, t.id_document_url, t.qualification_document_url, p.full_name
+      `SELECT t.user_id, t.id_document_url, t.qualification_document_url, t.verification_status, p.full_name
        FROM teacher_profiles t JOIN profiles p ON t.user_id = p.id
-       WHERE t.verification_status = 'pending'`
+       WHERE t.verification_status IN ('pending', 'unverified')
+       ORDER BY t.created_at DESC`
     );
-    res.json({ pending: rows.map((r) => ({ user_id: r.user_id, id_document_url: r.id_document_url, qualification_document_url: r.qualification_document_url, profiles: { full_name: r.full_name } })) });
+    res.json({ pending: rows.map((r) => ({ user_id: r.user_id, id_document_url: r.id_document_url, qualification_document_url: r.qualification_document_url, verification_status: r.verification_status, profiles: { full_name: r.full_name } })) });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

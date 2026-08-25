@@ -31,12 +31,13 @@ router.get('/teachers', async (req: Request, res: Response): Promise<any> => {
   try {
     const { subjectId, examType, location, maxPrice } = req.query;
     let query = `
-      SELECT t.user_id, t.video_url as headline, t.hourly_rate_cents, t.location, t.exam_types, t.verification_status,
+      SELECT t.user_id, COALESCE(t.headline, t.video_url, '') as headline, t.hourly_rate_cents,
+             COALESCE(t.location, t.background, 'Greater Accra') as location, t.exam_types, t.verification_status,
              t.years_experience, p.full_name, p.avatar_url, s.name as subject_name
       FROM teacher_profiles t
       LEFT JOIN profiles p ON t.user_id = p.id
       LEFT JOIN subjects s ON t.primary_subject_id = s.id
-      WHERE t.is_active = true AND t.verification_status = 'verified'
+      WHERE (t.is_active = true OR t.is_active IS NULL) AND t.verification_status = 'verified'
     `;
     const params: any[] = [];
     let i = 1;
@@ -83,7 +84,8 @@ router.get('/teachers', async (req: Request, res: Response): Promise<any> => {
 router.get('/teachers/:id', async (req: Request, res: Response): Promise<any> => {
   try {
     const [{ rows: tp }, { rows: topics }, { rows: availability }, { rows: ratings }] = await Promise.all([
-      pool.query(`SELECT t.user_id, t.video_url as headline, t.hourly_rate_cents, t.years_experience, t.background as location,
+      pool.query(`SELECT t.user_id, COALESCE(t.headline, t.video_url, '') as headline, t.hourly_rate_cents, t.years_experience,
+                  COALESCE(t.location, t.background, 'Greater Accra') as location,
                   t.verification_status, t.exam_types, p.full_name, p.bio, p.avatar_url, s.name as subject_name
                   FROM teacher_profiles t LEFT JOIN profiles p ON t.user_id=p.id LEFT JOIN subjects s ON t.primary_subject_id=s.id
                   WHERE t.user_id=$1`, [req.params.id]),
