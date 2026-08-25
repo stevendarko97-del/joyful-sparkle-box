@@ -94,7 +94,15 @@ function TeacherDashboard() {
   });
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/auth" });
+    if (!loading) {
+      if (!user) {
+        navigate({ to: "/auth" });
+      } else if (user.role === "admin") {
+        navigate({ to: "/admin" });
+      } else if (user.role === "student") {
+        navigate({ to: "/dashboard/student" });
+      }
+    }
   }, [user, loading, navigate]);
 
   const loadNotifications = async () => {

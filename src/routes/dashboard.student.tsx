@@ -109,7 +109,17 @@ function StudentDashboard() {
   });
   const [myTickets, setMyTickets] = useState<any[]>([]);
 
-  useEffect(() => { if (!loading && !user) navigate({ to: "/auth" }); }, [user, loading, navigate]);
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        navigate({ to: "/auth" });
+      } else if (user.role === "admin") {
+        navigate({ to: "/admin" });
+      } else if (user.role === "teacher") {
+        navigate({ to: "/dashboard/teacher" });
+      }
+    }
+  }, [user, loading, navigate]);
 
   const loadDashboard = async () => {
     setLoadingData(true);

@@ -249,11 +249,11 @@ export function SiteNav() {
 
               {/* Dashboard Link */}
               <Link
-                to={isTeacher ? "/dashboard/teacher" : "/dashboard/student"}
+                to={isAdmin ? "/admin" : isTeacher ? "/dashboard/teacher" : "/dashboard/student"}
                 className="hidden md:flex items-center gap-2 h-9 rounded-full bg-brand px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-brand/90 transition-all hover:scale-[1.02]"
               >
                 <LayoutDashboard className="size-3.5" />
-                <span>Dashboard</span>
+                <span>{isAdmin ? "Admin Portal" : "Dashboard"}</span>
               </Link>
 
               {/* User Menu / Sign Out */}
@@ -270,15 +270,15 @@ export function SiteNav() {
                   <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border bg-card shadow-xl z-50 p-1.5 fade-in">
                     <div className="px-3 py-2 border-b border-border mb-1">
                       <p className="text-xs font-semibold text-ink truncate">{user?.email}</p>
-                      <p className="text-[10px] uppercase font-bold text-brand">{isTeacher ? "Teacher" : "Student"}</p>
+                      <p className="text-[10px] uppercase font-bold text-brand">{isAdmin ? "Admin" : isTeacher ? "Teacher" : "Student"}</p>
                     </div>
                     <Link
-                      to={isTeacher ? "/dashboard/teacher" : "/dashboard/student"}
+                      to={isAdmin ? "/admin" : isTeacher ? "/dashboard/teacher" : "/dashboard/student"}
                       onClick={() => setUserMenuOpen(false)}
                       className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-ink hover:bg-secondary transition-colors"
                     >
                       <LayoutDashboard className="size-3.5 text-muted-foreground" />
-                      Dashboard
+                      {isAdmin ? "Admin Portal" : "Dashboard"}
                     </Link>
                     <Link
                       to="/messages"
@@ -385,12 +385,12 @@ export function SiteNav() {
           <div className="pt-4 mt-2 border-t border-border flex flex-col gap-3">
             {isAuthed ? (
               <Link
-                to={isTeacher ? "/dashboard/teacher" : "/dashboard/student"}
+                to={isAdmin ? "/admin" : isTeacher ? "/dashboard/teacher" : "/dashboard/student"}
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center justify-center gap-2 h-10 rounded-full bg-brand px-4 text-sm font-semibold text-primary-foreground shadow-sm"
               >
                 <LayoutDashboard className="size-4" />
-                <span>Dashboard</span>
+                <span>{isAdmin ? "Admin Portal" : "Dashboard"}</span>
               </Link>
             ) : (
               <>
