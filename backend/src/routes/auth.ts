@@ -156,7 +156,11 @@ router.post('/login', authLimiter, validate(loginSchema), async (req: Request, r
     const profile = profileRes.rows[0];
     const role = profile?.role || 'student';
     if (profile?.suspended) {
-      return res.status(403).json({ error: 'account_suspended' });
+      return res.status(403).json({
+        error: 'account_suspended',
+        email: user.email,
+        message: 'Your account has been suspended by an administrator. You may submit an appeal below.'
+      });
     }
     const token = jwt.sign({ id: user.id, role, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });

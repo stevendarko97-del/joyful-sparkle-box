@@ -36,6 +36,7 @@ export const Route = createFileRoute("/support")({
 const CATEGORIES = [
   { value: "technical_issue", label: "Technical & Video/Audio Problem" },
   { value: "payment_dispute", label: "Payment or Payout / MoMo Dispute" },
+  { value: "account_appeal", label: "🚨 Account Suspension Appeal / Reinstatement" },
   { value: "tutor_no_show", label: "Tutor No-Show (Tutor did not attend)" },
   { value: "student_no_show", label: "Student No-Show (Student did not attend)" },
   { value: "lesson_quality", label: "Lesson Quality or Incomplete Session" },
@@ -68,6 +69,9 @@ function SupportPage() {
   const [category, setCategory] = useState("technical_issue");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [myTickets, setMyTickets] = useState<any[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
@@ -102,24 +106,33 @@ function SupportPage() {
       return;
     }
 
-    const token = localStorage.getItem("token");
-    if (!token) {
-      toast.error("Please log in to submit a ticket so we can track your response");
-      return;
+    if (!isAuthed) {
+      if (!guestEmail.trim() || !guestEmail.includes("@")) {
+        toast.error("Please provide a valid email address");
+        return;
+      }
+      if (!guestPhone.trim() || guestPhone.replace(/[^0-9]/g, "").length < 9) {
+        toast.error("Please enter a valid Ghana phone number so admin can SMS you");
+        return;
+      }
     }
 
     setSubmitting(true);
+    const token = localStorage.getItem("token");
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`${BACKEND}/api/support/tickets`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           category,
           subject: subject.trim(),
           description: description.trim(),
+          name: isAuthed ? undefined : guestName.trim() || undefined,
+          email: isAuthed ? undefined : guestEmail.trim() || undefined,
+          phone: isAuthed ? undefined : guestPhone.trim() || undefined,
         }),
       });
 
@@ -127,11 +140,16 @@ function SupportPage() {
       setSubmitting(false);
 
       if (res.ok) {
-        toast.success("Support ticket submitted! Admin will investigate and respond shortly.");
+        toast.success("Support ticket submitted! Admin will investigate and respond via SMS or email shortly.");
         setSubject("");
         setDescription("");
-        loadMyTickets();
-        setActiveTab("tickets");
+        setGuestName("");
+        setGuestEmail("");
+        setGuestPhone("");
+        if (isAuthed) {
+          loadMyTickets();
+          setActiveTab("tickets");
+        }
       } else {
         toast.error(data?.error || "Failed to submit support request");
       }
@@ -216,22 +234,49 @@ function SupportPage() {
                   </div>
                 </div>
 
-                {!isAuthed ? (
-                  <div className="rounded-2xl bg-amber-50 border border-amber-200 p-6 text-center">
-                    <AlertCircle className="size-8 text-amber-600 mx-auto mb-2" />
-                    <h4 className="font-bold text-sm text-amber-900">Sign in to Submit Support Tickets</h4>
-                    <p className="text-xs text-amber-800 mt-1 max-w-sm mx-auto">
-                      Please sign in with your student or teacher account so we can link your issue to your account and send live responses.
-                    </p>
-                    <Link
-                      to="/auth"
-                      className="mt-4 inline-block px-6 py-2 rounded-full bg-brand text-primary-foreground text-xs font-semibold shadow-sm hover:bg-brand/90"
-                    >
-                      Sign In Now
-                    </Link>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {!isAuthed && (
+                    <div className="p-4 rounded-2xl bg-secondary/50 border border-border space-y-3">
+                      <p className="text-xs font-bold text-ink flex items-center gap-1.5">
+                        <AlertCircle className="size-4 text-brand" />
+                        Guest / Account Appeal Contact Information
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground block mb-1">Your Full Name</label>
+                          <input
+                            type="text"
+                            value={guestName}
+                            onChange={(e) => setGuestName(e.target.value)}
+                            placeholder="e.g. Kwesi Mensah"
+                            className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-ink focus:ring-1 focus:ring-brand focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground block mb-1">Email Address <span className="text-destructive font-bold">*</span></label>
+                          <input
+                            type="email"
+                            required
+                            value={guestEmail}
+                            onChange={(e) => setGuestEmail(e.target.value)}
+                            placeholder="e.g. kwesi@example.com"
+                            className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-ink focus:ring-1 focus:ring-brand focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground block mb-1">Ghana Phone Number (For SMS Updates) <span className="text-destructive font-bold">*</span></label>
+                        <input
+                          type="tel"
+                          required
+                          value={guestPhone}
+                          onChange={(e) => setGuestPhone(e.target.value)}
+                          placeholder="e.g. 024 123 4567"
+                          className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-ink focus:ring-1 focus:ring-brand focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
                     <div>
                       <label className="text-xs font-semibold text-ink block mb-1.5">Category</label>
                       <select
@@ -281,7 +326,6 @@ function SupportPage() {
                       </Button>
                     </div>
                   </form>
-                )}
               </div>
 
               {/* Direct Support Channels */}

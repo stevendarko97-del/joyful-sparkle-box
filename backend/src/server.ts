@@ -275,6 +275,11 @@ app.get('/api/health', (_req: Request, res: Response) => {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         resolved_at TIMESTAMP WITH TIME ZONE
       );
+      ALTER TABLE support_tickets
+        ADD COLUMN IF NOT EXISTS guest_name TEXT,
+        ADD COLUMN IF NOT EXISTS guest_email TEXT,
+        ADD COLUMN IF NOT EXISTS guest_phone TEXT;
+      ALTER TABLE support_tickets ALTER COLUMN reporter_id DROP NOT NULL;
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { z } from "zod";
 import { SiteNav } from "@/components/site-nav";
 import { toast } from "sonner";
-import { Eye, EyeOff, MailCheck, RefreshCw, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, MailCheck, RefreshCw, ShieldCheck, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type ExamType = "BECE" | "WASSCE" | "NOV_DEC" | "SHS_REMEDIAL" | "JHS_REMEDIAL";
@@ -89,6 +89,14 @@ function AuthPage() {
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [resendBusy, setResendBusy] = useState(false);
 
+  // Suspended account appeal state
+  const [suspendedAccount, setSuspendedAccount] = useState<{ email: string; reason?: string } | null>(null);
+  const [appealName, setAppealName] = useState("");
+  const [appealPhone, setAppealPhone] = useState("");
+  const [appealMessage, setAppealMessage] = useState("");
+  const [appealSubmitting, setAppealSubmitting] = useState(false);
+  const [appealSubmitted, setAppealSubmitted] = useState(false);
+
   const setMode = (m: "login" | "signup") =>
     navigate({ search: (prev) => ({ ...prev, mode: m }) });
   const setRole = (r: "student" | "teacher") =>
@@ -126,13 +134,61 @@ function AuthPage() {
   const toggle = <T,>(list: T[], value: T, set: (v: T[]) => void) =>
     set(list.includes(value) ? list.filter(v => v !== value) : [...list, value]);
 
+  const handleAppealSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appealMessage.trim()) {
+      toast.error("Please explain your reason or appeal message.");
+      return;
+    }
+    if (!appealPhone.trim() || appealPhone.replace(/[^0-9]/g, "").length < 9) {
+      toast.error("Please enter a valid Ghana phone number so the admin can contact you.");
+      return;
+    }
+    setAppealSubmitting(true);
+    try {
+      const res = await fetch(`${BACKEND}/api/support/tickets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: "account_appeal",
+          subject: `Account Suspension Appeal (${appealName.trim() || suspendedAccount?.email})`,
+          description: appealMessage.trim(),
+          name: appealName.trim() || undefined,
+          email: suspendedAccount?.email || email,
+          phone: appealPhone.trim(),
+        }),
+      });
+      if (res.ok) {
+        toast.success("Appeal submitted! Admin has been notified and will review your account.");
+        setAppealSubmitted(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to submit appeal");
+      }
+    } catch {
+      toast.error("Network error while submitting appeal");
+    } finally {
+      setAppealSubmitting(false);
+    }
+  };
+
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
     setUnverifiedEmail(null);
+    setSuspendedAccount(null);
+    setAppealSubmitted(false);
+
     // Block weak passwords on signup
     if (mode === "signup" && getPasswordStrength(password) < 2) {
       toast.error("Please choose a stronger password (at least 8 characters with a mix of letters and numbers).");
       return;
+    }
+    if (mode === "signup") {
+      const cleanPhone = phone.replace(/[^0-9]/g, "");
+      if (!cleanPhone || cleanPhone.length < 9) {
+        toast.error("A valid Ghana phone number (e.g. 024XXXXXXX) is compulsory for creating an account.");
+        return;
+      }
     }
     setBusy(true);
     try {
@@ -199,7 +255,13 @@ function AuthPage() {
           return;
         }
         if (res.status === 403 && data.error === "account_suspended") {
-          toast.error("Your account has been suspended. Please contact support for assistance.");
+          setSuspendedAccount({
+            email: data.email || email,
+            reason: data.message || "Your account has been suspended by an administrator."
+          });
+          setAppealName(fullName || "");
+          setAppealPhone(phone || "");
+          toast.error("Your account has been suspended. You can submit an appeal below.");
           return;
         }
         if (!res.ok) throw new Error(data.error ?? "Login failed");
@@ -359,11 +421,11 @@ function AuthPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="phone" className="text-sm font-medium">Phone (MoMo number)</label>
-                  <input id="phone" type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className={fieldClass} placeholder="024 000 0000" />
+                  <label htmlFor="phone" className="text-sm font-medium">Ghana Phone (Compulsory for SMS &amp; MoMo) <span className="text-destructive font-bold">*</span></label>
+                  <input id="phone" type="tel" required value={phone} onChange={e => setPhone(e.target.value)} className={fieldClass} placeholder="024 123 4567" />
                 </div>
                 <div>
-                  <label htmlFor="location" className="text-sm font-medium">Town / city</label>
+                  <label htmlFor="location" className="text-sm font-medium">Town / city <span className="text-destructive font-bold">*</span></label>
                   <input id="location" required value={location} onChange={e => setLocation(e.target.value)} className={fieldClass} placeholder="Accra, Greater Accra" />
                 </div>
               </div>
@@ -371,7 +433,7 @@ function AuthPage() {
           )}
 
           <div>
-            <label htmlFor="email" className="text-sm font-medium">Email</label>
+            <label htmlFor="email" className="text-sm font-medium">Email <span className="text-destructive font-bold">*</span></label>
             <input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className={fieldClass} />
           </div>
 
@@ -384,7 +446,7 @@ function AuthPage() {
 
           <div>
             <div className="flex items-center justify-between">
-              <label htmlFor="password" className="text-sm font-medium">Password</label>
+              <label htmlFor="password" className="text-sm font-medium">Password <span className="text-destructive font-bold">*</span></label>
             </div>
             <div className="relative mt-1">
               <input
@@ -433,6 +495,74 @@ function AuthPage() {
               </div>
             )}
           </div>
+
+          {/* Account Suspended — Appeal Card */}
+          {mode === "login" && suspendedAccount && (
+            <div className="rounded-2xl border-2 border-red-300 bg-red-50/90 p-4 sm:p-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="size-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="size-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-bold text-red-900">Account Suspended</h4>
+                  <p className="text-xs text-red-700 mt-0.5 leading-relaxed">
+                    {suspendedAccount.reason}
+                  </p>
+                </div>
+              </div>
+
+              {!appealSubmitted ? (
+                <div className="pt-2 border-t border-red-200/80 space-y-2.5">
+                  <p className="text-xs font-bold text-red-900">
+                    Send an account appeal directly to the Administrator:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Your full name"
+                      value={appealName}
+                      onChange={e => setAppealName(e.target.value)}
+                      className="h-9 px-3 rounded-lg border border-red-200 bg-white text-xs text-ink focus:outline-none focus:ring-1 focus:ring-red-400"
+                    />
+                    <input
+                      type="tel"
+                      required
+                      placeholder="Your Ghana phone number *"
+                      value={appealPhone}
+                      onChange={e => setAppealPhone(e.target.value)}
+                      className="h-9 px-3 rounded-lg border border-red-200 bg-white text-xs text-ink focus:outline-none focus:ring-1 focus:ring-red-400"
+                    />
+                  </div>
+                  <textarea
+                    required
+                    rows={2}
+                    placeholder="Explain your appeal or why your account should be reinstated..."
+                    value={appealMessage}
+                    onChange={e => setAppealMessage(e.target.value)}
+                    className="w-full p-2.5 rounded-lg border border-red-200 bg-white text-xs text-ink focus:outline-none focus:ring-1 focus:ring-red-400 resize-none"
+                  />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <Link to="/support" className="text-[11px] font-semibold text-red-700 hover:underline">
+                      Go to Help Center →
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleAppealSubmit}
+                      disabled={appealSubmitting}
+                      className="h-8 px-4 rounded-lg bg-red-700 hover:bg-red-800 text-white text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
+                    >
+                      {appealSubmitting ? "Submitting Appeal…" : "Send Appeal to Admin"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-white border border-emerald-300 text-center space-y-1">
+                  <p className="text-xs font-bold text-emerald-800">✓ Appeal Sent to Admin</p>
+                  <p className="text-[11px] text-muted-foreground">Admin will review your appeal and contact you via SMS or email at {appealPhone || suspendedAccount.email}.</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Email not verified — login error */}
           {mode === "login" && unverifiedEmail && (

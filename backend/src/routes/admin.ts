@@ -97,7 +97,7 @@ router.get('/analytics', async (_req: Request, res: Response): Promise<any> => {
 router.get('/users', async (_req: Request, res: Response): Promise<any> => {
   try {
     const { rows } = await pool.query(`
-      SELECT p.id, p.full_name, p.role, p.suspended, p.created_at, u.email,
+      SELECT p.id, p.full_name, p.role, p.phone, p.location, p.suspended, p.created_at, u.email,
              tp.verification_status, tp.hourly_rate_cents
       FROM profiles p
       LEFT JOIN local_users u ON p.id = u.id
@@ -278,10 +278,14 @@ router.post('/payouts', validate(payoutSchema), async (req: Request, res: Respon
 router.get('/tickets', async (_req: Request, res: Response): Promise<any> => {
   try {
     const { rows } = await pool.query(`
-      SELECT st.*, p.full_name as reporter_name, p.role as reporter_role, p.phone as reporter_phone,
-             u.email as reporter_email, b.scheduled_at as booking_scheduled_at, b.price_cents as booking_price_cents
+      SELECT st.*,
+             COALESCE(p.full_name, st.guest_name, 'Guest User') as reporter_name,
+             COALESCE(p.role, CASE WHEN st.category = 'account_appeal' THEN 'suspended_user' ELSE 'guest' END) as reporter_role,
+             COALESCE(p.phone, st.guest_phone) as reporter_phone,
+             COALESCE(u.email, st.guest_email) as reporter_email,
+             b.scheduled_at as booking_scheduled_at, b.price_cents as booking_price_cents
       FROM support_tickets st
-      JOIN profiles p ON st.reporter_id = p.id
+      LEFT JOIN profiles p ON st.reporter_id = p.id
       LEFT JOIN local_users u ON p.id = u.id
       LEFT JOIN bookings b ON st.booking_id = b.id
       ORDER BY CASE WHEN st.status = 'open' THEN 1 WHEN st.status = 'in_progress' THEN 2 ELSE 3 END, st.created_at DESC
@@ -302,16 +306,25 @@ router.put('/tickets/:ticketId/status', validate(ticketStatusSchema), async (req
     if (rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
     const ticket = rows[0];
     const noteMsg = resolution_notes ? `: "${resolution_notes}"` : '';
-    await createNotification(ticket.reporter_id,
-      `Support Ticket ${status.toUpperCase().replace('_', ' ')}`,
-      `Admin updated your report "${ticket.subject}" to ${status.replace('_', ' ')}${noteMsg}`,
-      'support', '/dashboard');
+
+    if (ticket.reporter_id) {
+      await createNotification(ticket.reporter_id,
+        `Support Ticket ${status.toUpperCase().replace('_', ' ')}`,
+        `Admin updated your report "${ticket.subject}" to ${status.replace('_', ' ')}${noteMsg}`,
+        'support', '/dashboard');
+    }
 
     if (status === 'resolved') {
       (async () => {
         try {
-          const { rows: uRows } = await pool.query('SELECT phone FROM profiles WHERE id = $1', [ticket.reporter_id]);
-          if (uRows.length && uRows[0].phone) await sendSupportResolvedSms({ phone: uRows[0].phone, subject: ticket.subject, resolutionNotes: resolution_notes });
+          let phoneToSms = ticket.guest_phone;
+          if (ticket.reporter_id) {
+            const { rows: uRows } = await pool.query('SELECT phone FROM profiles WHERE id = $1', [ticket.reporter_id]);
+            if (uRows.length && uRows[0].phone) phoneToSms = uRows[0].phone;
+          }
+          if (phoneToSms) {
+            await sendSupportResolvedSms({ phone: phoneToSms, subject: ticket.subject, resolutionNotes: resolution_notes });
+          }
         } catch (e) { console.error('Support SMS error:', e); }
       })();
     }

@@ -13,6 +13,7 @@ import {
   BadgePercent,
   ShieldCheck,
   MessageSquareText,
+  MessageSquare,
   Send,
   CheckCircle2,
   BarChart3,
@@ -74,6 +75,8 @@ type UserItem = {
   id: string;
   full_name: string | null;
   email: string | null;
+  phone?: string | null;
+  location?: string | null;
   role: string;
   suspended: boolean;
   verification_status?: string | null;
@@ -885,6 +888,7 @@ function AdminPage() {
                     <tr>
                       <th className="px-4 py-3">User Name</th>
                       <th className="px-4 py-3">Email Address</th>
+                      <th className="px-4 py-3">Phone Number</th>
                       <th className="px-4 py-3">Role</th>
                       <th className="px-4 py-3">Registered Date</th>
                       <th className="px-4 py-3">Status</th>
@@ -898,7 +902,32 @@ function AdminPage() {
                           <p className="font-semibold text-ink">{u.full_name || "Unnamed User"}</p>
                           <p className="text-[10px] text-muted-foreground font-mono">ID: {u.id.slice(0, 8)}...</p>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{u.email || "—"}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {u.email || "—"}
+                          {u.location ? <p className="text-[10px] text-muted-foreground/70">📍 {u.location}</p> : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          {u.phone ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-xs font-semibold text-ink">{u.phone}</span>
+                              <button
+                                type="button"
+                                title="Send SMS message to this user"
+                                onClick={() => {
+                                  setSmsPhone(u.phone!);
+                                  setTab("sms");
+                                  toast.info(`Switched to SMS Gateway for ${u.full_name || u.phone}`);
+                                }}
+                                className="p-1 rounded-md text-brand hover:bg-brand/10 transition-colors inline-flex items-center gap-1 text-[11px] font-semibold"
+                              >
+                                <MessageSquare className="size-3" />
+                                SMS
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">No phone</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                             u.role === "teacher" ? "bg-brand/10 text-brand" :
@@ -1241,12 +1270,35 @@ function AdminPage() {
                       <tr key={t.id} className="hover:bg-secondary/30 transition-colors">
                         <td className="px-4 py-3">
                           <p className="font-semibold text-ink">{t.reporter_name}</p>
-                          <p className="text-[11px] text-muted-foreground capitalize">{t.reporter_role} {t.reporter_phone ? `· ${t.reporter_phone}` : ""}</p>
-                          <p className="text-[10px] text-muted-foreground/70">{new Date(t.created_at).toLocaleString()}</p>
+                          <p className="text-[11px] text-muted-foreground capitalize">
+                            {t.reporter_role?.replace(/_/g, " ")} {t.reporter_email ? `· ${t.reporter_email}` : ""}
+                          </p>
+                          {t.reporter_phone && (
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="font-mono text-[11px] font-semibold text-brand">📞 {t.reporter_phone}</span>
+                              <button
+                                type="button"
+                                title="Send SMS message to this user"
+                                onClick={() => {
+                                  setSmsPhone(t.reporter_phone!);
+                                  setTab("sms");
+                                  toast.info(`Switched to SMS Gateway for ${t.reporter_name}`);
+                                }}
+                                className="p-0.5 rounded text-brand hover:bg-brand/10 inline-flex items-center text-[10px] font-bold"
+                              >
+                                <MessageSquare className="size-3 mr-0.5" /> SMS
+                              </button>
+                            </div>
+                          )}
+                          <p className="text-[10px] text-muted-foreground/70 mt-1">{new Date(t.created_at).toLocaleString()}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                            {t.category.replace(/_/g, " ")}
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                            t.category === "account_appeal"
+                              ? "bg-red-100 text-red-800 border border-red-300 font-extrabold"
+                              : "bg-secondary text-muted-foreground"
+                          }`}>
+                            {t.category === "account_appeal" ? "🚨 Suspension Appeal" : t.category.replace(/_/g, " ")}
                           </span>
                           <p className="font-medium text-xs text-ink">{t.subject}</p>
                         </td>
