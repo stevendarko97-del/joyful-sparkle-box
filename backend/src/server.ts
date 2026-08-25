@@ -125,6 +125,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
       console.log('✅ Default Ghanaian subjects seeded automatically.');
     }
 
+    await pool.query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS location TEXT;');
     await pool.query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone TEXT;');
     await pool.query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT;');
     await pool.query('ALTER TABLE profiles ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT false;');

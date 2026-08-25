@@ -97,16 +97,33 @@ router.get('/analytics', async (_req: Request, res: Response): Promise<any> => {
 router.get('/users', async (_req: Request, res: Response): Promise<any> => {
   try {
     const { rows } = await pool.query(`
-      SELECT p.id, p.full_name, p.role, p.phone, p.location, p.suspended, p.created_at, u.email,
+      SELECT p.id, p.full_name, p.role, p.phone,
+             COALESCE(tp.location, sp.location) as location,
+             COALESCE(p.suspended, false) as suspended,
+             p.created_at, u.email,
              tp.verification_status, tp.hourly_rate_cents
       FROM profiles p
       LEFT JOIN local_users u ON p.id = u.id
       LEFT JOIN teacher_profiles tp ON p.id = tp.user_id
+      LEFT JOIN student_profiles sp ON p.id = sp.user_id
       ORDER BY p.created_at DESC
-      LIMIT 100
+      LIMIT 200
     `);
     res.json({ users: rows });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+  } catch (err: any) {
+    try {
+      const { rows } = await pool.query(`
+        SELECT p.id, p.full_name, p.role, p.phone, p.created_at, u.email
+        FROM profiles p
+        LEFT JOIN local_users u ON p.id = u.id
+        ORDER BY p.created_at DESC
+        LIMIT 200
+      `);
+      res.json({ users: rows.map(r => ({ ...r, suspended: false, verification_status: null, location: null })) });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  }
 });
 
 router.get('/bookings', async (_req: Request, res: Response): Promise<any> => {
