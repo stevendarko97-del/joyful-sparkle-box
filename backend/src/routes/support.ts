@@ -30,6 +30,13 @@ router.post('/tickets', async (req: Request, res: Response): Promise<any> => {
       return res.status(400).json({ error: 'Please provide your email and Ghana phone number' });
     }
 
+    if (!reporterId && email) {
+      const userLookup = await pool.query('SELECT id FROM local_users WHERE LOWER(email) = LOWER($1)', [email.trim()]);
+      if (userLookup.rows.length > 0) {
+        reporterId = userLookup.rows[0].id;
+      }
+    }
+
     const { rows } = await pool.query(`
       INSERT INTO support_tickets (reporter_id, booking_id, category, subject, description, guest_name, guest_email, guest_phone)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -44,6 +51,24 @@ router.post('/tickets', async (req: Request, res: Response): Promise<any> => {
         'support',
         '/dashboard'
       );
+    }
+
+    // Notify all admins of the new ticket or suspension appeal
+    try {
+      const adminRows = await pool.query("SELECT id FROM profiles WHERE role = 'admin'");
+      const senderLabel = name || email || phone || 'A user';
+      const isAppeal = category === 'account_appeal';
+      for (const adm of adminRows.rows) {
+        await createNotification(
+          adm.id,
+          isAppeal ? '🚨 Account Suspension Appeal Submitted' : '📩 New Support Request Submitted',
+          `${senderLabel} submitted: "${subject}". Message: "${description.slice(0, 120)}..."`,
+          'support',
+          '/admin'
+        );
+      }
+    } catch (e) {
+      console.error('Error notifying admins of support ticket:', e);
     }
 
     res.json({ ticket: rows[0], message: 'Support ticket submitted successfully. Admin has been notified.' });

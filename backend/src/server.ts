@@ -145,6 +145,17 @@ app.get('/api/health', (_req: Request, res: Response) => {
       ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
     `);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS student_profiles (
+        user_id UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+        school_name TEXT,
+        level TEXT,
+        exam_type TEXT,
+        location TEXT,
+        guardian_phone TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query(`
       ALTER TABLE bookings
       ADD COLUMN IF NOT EXISTS paystack_reference TEXT,
       ADD COLUMN IF NOT EXISTS paid_out BOOLEAN DEFAULT false,

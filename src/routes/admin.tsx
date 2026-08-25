@@ -42,6 +42,7 @@ type AdminTab = "overview" | "verifications" | "users" | "transactions" | "payou
 
 type Ticket = {
   id: string;
+  reporter_id?: string | null;
   reporter_name: string;
   reporter_role: string;
   reporter_phone: string | null;
@@ -124,7 +125,7 @@ function AdminPage() {
   const [txSearch, setTxSearch] = useState("");
   const [txStatusFilter, setTxStatusFilter] = useState<"all" | "succeeded" | "pending" | "failed">("all");
   const [txSubTab, setTxSubTab] = useState<"paystack" | "bookings">("paystack");
-  const [ticketFilter, setTicketFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
+  const [ticketFilter, setTicketFilter] = useState<"all" | "appeals" | "open" | "in_progress" | "resolved">("all");
   const [payoutSearch, setPayoutSearch] = useState("");
 
   // SMS Live Dispatch State
@@ -372,6 +373,7 @@ function AdminPage() {
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
       if (ticketFilter === "all") return true;
+      if (ticketFilter === "appeals") return t.category === "account_appeal";
       return t.status === ticketFilter;
     });
   }, [tickets, ticketFilter]);
@@ -1232,9 +1234,10 @@ function AdminPage() {
                   <h2 className="font-serif text-xl font-bold text-ink">Support Tickets &amp; Dispute Resolution</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">Manage user inquiries, technical reports, and session disputes.</p>
                 </div>
-                <div className="flex items-center gap-1.5 p-1 bg-secondary rounded-xl border border-border self-start sm:self-auto">
+                <div className="flex flex-wrap items-center gap-1.5 p-1 bg-secondary rounded-xl border border-border self-start sm:self-auto">
                   {[
                     { id: "all", label: "All Tickets" },
+                    { id: "appeals", label: `🚨 Suspension Appeals (${tickets.filter(t => t.category === "account_appeal").length})` },
                     { id: "open", label: `Open (${tickets.filter(t => t.status === "open").length})` },
                     { id: "in_progress", label: "In Progress" },
                     { id: "resolved", label: "Resolved" },
@@ -1330,13 +1333,27 @@ function AdminPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            {t.category === "account_appeal" && t.reporter_id && t.status !== "resolved" && (
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1"
+                                onClick={async () => {
+                                  await handleSuspendUser(t.reporter_id!, false);
+                                  await updateTicketStatus(t.id, "resolved");
+                                  loadAllData();
+                                }}
+                              >
+                                <UserCheck className="size-3.5" />
+                                Reinstate &amp; Unblock
+                              </Button>
+                            )}
                             {t.status === "open" && (
                               <Button size="sm" variant="outline" onClick={() => updateTicketStatus(t.id, "in_progress")}>
                                 Mark Reviewing
                               </Button>
                             )}
-                            {t.status !== "resolved" && (
+                            {t.status !== "resolved" && t.category !== "account_appeal" && (
                               <Button size="sm" onClick={() => updateTicketStatus(t.id, "resolved")} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                                 Resolve &amp; Send SMS
                               </Button>
