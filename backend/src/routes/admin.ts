@@ -191,23 +191,40 @@ router.put('/verifications/:userId', validate(verificationActionSchema), async (
     const { approve, notes } = req.body;
     const status = approve ? 'verified' : 'rejected';
     const verifiedAt = approve ? new Date().toISOString() : null;
-    await pool.query(
-      `UPDATE teacher_profiles SET verification_status = $1, verified_at = $2, verification_notes = $3 WHERE user_id = $4`,
-      [status, verifiedAt, notes, userId]
+
+    const resUpdate = await pool.query(
+      `UPDATE teacher_profiles
+       SET verification_status = $1, verified_at = $2, verification_notes = $3, is_active = true
+       WHERE user_id = $4 RETURNING user_id`,
+      [status, verifiedAt, notes || null, userId]
     );
+
+    if (resUpdate.rowCount === 0) {
+      await pool.query(
+        `INSERT INTO teacher_profiles (user_id, verification_status, verified_at, verification_notes, is_active)
+         VALUES ($1, $2, $3, $4, true)
+         ON CONFLICT (user_id) DO UPDATE SET
+           verification_status = EXCLUDED.verification_status,
+           verified_at = EXCLUDED.verified_at,
+           verification_notes = EXCLUDED.verification_notes,
+           is_active = true`,
+        [userId, status, verifiedAt, notes || null]
+      );
+    }
+
     if (approve) {
       await createNotification(
         userId,
-        '✅ Certificate Verified — You\'re Now Live!',
-        'Congratulations! Your teaching certificate has been verified by our admin team. Your profile is now visible to students and you can start receiving bookings.',
+        '✅ Profile & Certificate Verified — You\'re Now Live!',
+        'Congratulations! Your teaching profile has been approved by our admin team. Your profile is now visible to students on Find a Tutor and you can start receiving bookings.',
         'general',
         '/dashboard/teacher'
       );
     } else {
       await createNotification(
         userId,
-        '❌ Certificate Verification Rejected',
-        `Your certificate was not accepted${notes ? `: ${notes}` : ''}. Please upload a valid teaching certificate in your Profile tab and contact support for re-review.`,
+        '❌ Certificate Verification Notice',
+        `Your verification request was rejected${notes ? `: ${notes}` : ''}. Please upload a valid certificate or license in your Profile tab and submit for re-review.`,
         'support',
         '/dashboard/teacher'
       );

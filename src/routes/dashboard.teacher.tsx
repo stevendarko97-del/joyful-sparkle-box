@@ -28,8 +28,12 @@ import {
   X,
   CalendarCheck,
   Menu,
+  FileText,
+  Upload,
+  ShieldCheck,
 } from "lucide-react";
 import { ReportDialog } from "@/components/report-dialog";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/dashboard/teacher")({ component: TeacherDashboard });
 
@@ -92,6 +96,97 @@ function TeacherDashboard() {
     bookingId: null,
     label: null,
   });
+
+  // Certificate / Document Upload State
+  const [dismissVerificationNotice, setDismissVerificationNotice] = useState(false);
+  const [certFile, setCertFile] = useState<File | null>(null);
+  const [idFile, setIdFile] = useState<File | null>(null);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+
+  const openDoc = async (urlOrPath: string) => {
+    if (!urlOrPath) return;
+    if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://") || urlOrPath.startsWith("data:")) {
+      window.open(urlOrPath, "_blank");
+      return;
+    }
+    try {
+      const { data } = await supabase.storage.from("verification-docs").createSignedUrl(urlOrPath, 3600);
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank");
+      } else {
+        toast.error("Could not preview document");
+      }
+    } catch {
+      window.open(urlOrPath, "_blank");
+    }
+  };
+
+  const handleUploadDocuments = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!certFile && !idFile) {
+      toast.error("Please select a Certificate or National ID file to upload.");
+      return;
+    }
+    setUploadingDocs(true);
+    try {
+      let certUrl = dashData?.teacherProfile?.qualification_document_url || null;
+      let idUrl = dashData?.teacherProfile?.id_document_url || null;
+
+      if (certFile) {
+        const fileExt = certFile.name.split(".").pop();
+        const fileName = `${user?.id}/cert-${Date.now()}.${fileExt}`;
+        const { error: upErr } = await supabase.storage.from("verification-docs").upload(fileName, certFile, { upsert: true });
+        if (!upErr) {
+          certUrl = fileName;
+        } else {
+          certUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(certFile);
+          });
+        }
+      }
+
+      if (idFile) {
+        const fileExt = idFile.name.split(".").pop();
+        const fileName = `${user?.id}/id-${Date.now()}.${fileExt}`;
+        const { error: upErr } = await supabase.storage.from("verification-docs").upload(fileName, idFile, { upsert: true });
+        if (!upErr) {
+          idUrl = fileName;
+        } else {
+          idUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(idFile);
+          });
+        }
+      }
+
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${BACKEND}/api/teacher/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          qualificationDocumentUrl: certUrl,
+          idDocumentUrl: idUrl,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Documents submitted! Your profile is now under admin verification.");
+        setCertFile(null);
+        setIdFile(null);
+        loadDashboard();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to submit documents for verification");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload documents");
+    } finally {
+      setUploadingDocs(false);
+    }
+  };
 
   useEffect(() => {
     if (!loading) {
@@ -785,8 +880,8 @@ function TeacherDashboard() {
         </div>
 
         {/* ── Verification Status Banner ── */}
-        {dashData?.teacherProfile && dashData.teacherProfile.verification_status !== 'verified' && (
-          <div className={`mb-6 rounded-2xl border-2 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start gap-4 ${
+        {dashData?.teacherProfile && dashData.teacherProfile.verification_status !== 'verified' && !dismissVerificationNotice && (
+          <div className={`mb-6 rounded-2xl border-2 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start gap-4 relative ${
             dashData.teacherProfile.verification_status === 'rejected'
               ? 'bg-red-50 border-red-300'
               : 'bg-amber-50 border-amber-300'
@@ -801,7 +896,7 @@ function TeacherDashboard() {
                 : <Clock className="size-5" />
               }
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 pr-6 sm:pr-0">
               <p className={`text-sm font-bold ${
                 dashData.teacherProfile.verification_status === 'rejected' ? 'text-red-800' : 'text-amber-800'
               }`}>
@@ -814,26 +909,40 @@ function TeacherDashboard() {
                 dashData.teacherProfile.verification_status === 'rejected' ? 'text-red-700' : 'text-amber-700'
               }`}>
                 {dashData.teacherProfile.verification_status === 'rejected'
-                  ? 'Your certificate was not accepted. You are currently not visible to students. Please upload a valid teaching certificate or qualification document in your Profile tab, then contact support for re-review.'
+                  ? (dashData.teacherProfile.verification_notes
+                      ? `Reason for rejection: "${dashData.teacherProfile.verification_notes}". You are not visible to students. Please upload a valid certificate or license below in your Profile tab.`
+                      : 'Your certificate was not accepted. You are currently not visible to students. Please upload a valid teaching certificate or qualification document in your Profile tab.')
                   : 'Your profile and certificate are under review by our admin team. You will not appear in student searches until your certificate is verified. This usually takes 1–2 business days.'
                 }
               </p>
               {dashData.teacherProfile.verification_status === 'rejected' && (
                 <button
+                  type="button"
                   onClick={() => setTab('profile')}
                   className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-red-700 hover:text-red-900 hover:underline"
                 >
                   <Settings className="size-3.5" />
-                  Update certificate in Profile →
+                  Upload new certificate in Profile tab →
                 </button>
               )}
             </div>
-            <div className={`self-start sm:self-center shrink-0 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-              dashData.teacherProfile.verification_status === 'rejected'
-                ? 'bg-red-100 text-red-700 border-red-300'
-                : 'bg-amber-100 text-amber-700 border-amber-300'
-            }`}>
-              {dashData.teacherProfile.verification_status === 'rejected' ? 'Rejected' : 'Pending Review'}
+            <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+              <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                dashData.teacherProfile.verification_status === 'rejected'
+                  ? 'bg-red-100 text-red-700 border-red-300'
+                  : 'bg-amber-100 text-amber-700 border-amber-300'
+              }`}>
+                {dashData.teacherProfile.verification_status === 'rejected' ? 'Rejected' : 'Pending Review'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDismissVerificationNotice(true)}
+                className="p-1 rounded-lg text-muted-foreground hover:text-ink hover:bg-black/5 transition-colors"
+                title="Dismiss notice"
+                aria-label="Dismiss notice"
+              >
+                <X className="size-4" />
+              </button>
             </div>
           </div>
         )}
@@ -1252,6 +1361,101 @@ function TeacherDashboard() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* ── Teaching Credentials & Certificate Upload Card ── */}
+            <div className="rounded-2xl border border-border bg-secondary/30 p-4 sm:p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="size-8 rounded-lg bg-brand/10 text-brand flex items-center justify-center">
+                    <ShieldCheck className="size-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-ink">Teaching Certificate &amp; Identity Verification</h4>
+                    <p className="text-[11px] text-muted-foreground">Upload your educational certificate, degree, or license to get verified by admin.</p>
+                  </div>
+                </div>
+                <div className={`self-start sm:self-auto px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                  dashData?.teacherProfile?.verification_status === "verified"
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                    : dashData?.teacherProfile?.verification_status === "rejected"
+                    ? "bg-red-100 text-red-800 border-red-300"
+                    : "bg-amber-100 text-amber-800 border-amber-300"
+                }`}>
+                  {dashData?.teacherProfile?.verification_status === "verified" ? "✓ Verified & Live" :
+                   dashData?.teacherProfile?.verification_status === "rejected" ? "❌ Rejected" : "⏳ Pending Review"}
+                </div>
+              </div>
+
+              {/* Already uploaded documents links */}
+              {(dashData?.teacherProfile?.qualification_document_url || dashData?.teacherProfile?.id_document_url) && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {dashData?.teacherProfile?.qualification_document_url && (
+                    <button
+                      type="button"
+                      onClick={() => openDoc(dashData.teacherProfile.qualification_document_url)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-card border border-border text-ink hover:bg-brand hover:text-primary-foreground transition-colors shadow-sm"
+                    >
+                      <GraduationCap className="size-3.5" />
+                      View Uploaded Certificate / Degree
+                      <ExternalLink className="size-3 opacity-60" />
+                    </button>
+                  )}
+                  {dashData?.teacherProfile?.id_document_url && (
+                    <button
+                      type="button"
+                      onClick={() => openDoc(dashData.teacherProfile.id_document_url)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-card border border-border text-ink hover:bg-brand hover:text-primary-foreground transition-colors shadow-sm"
+                    >
+                      <FileText className="size-3.5" />
+                      View Uploaded National ID
+                      <ExternalLink className="size-3 opacity-60" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Upload Form */}
+              <form onSubmit={handleUploadDocuments} className="pt-2 border-t border-border/60 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink mb-1">
+                      Teaching Certificate / License (PDF, PNG, JPG)
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={e => setCertFile(e.target.files?.[0] || null)}
+                      className="w-full text-xs text-muted-foreground file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand file:text-primary-foreground hover:file:bg-brand/90 cursor-pointer"
+                    />
+                    {certFile && <p className="text-[10px] text-brand mt-1 font-medium">Selected: {certFile.name}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-ink mb-1">
+                      National ID / Ghana Card (PDF, PNG, JPG)
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={e => setIdFile(e.target.files?.[0] || null)}
+                      className="w-full text-xs text-muted-foreground file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-secondary file:text-ink hover:file:bg-secondary/80 cursor-pointer"
+                    />
+                    {idFile && <p className="text-[10px] text-brand mt-1 font-medium">Selected: {idFile.name}</p>}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={uploadingDocs || (!certFile && !idFile)}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-ink text-primary-foreground text-xs font-semibold hover:bg-ink/90 disabled:opacity-40 transition-colors"
+                  >
+                    <Upload className="size-3.5" />
+                    {uploadingDocs ? "Uploading Documents…" : "Submit Documents for Verification"}
+                  </button>
+                </div>
+              </form>
             </div>
 
             <div className="pt-4 border-t border-border">

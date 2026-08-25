@@ -76,6 +76,7 @@ type UserItem = {
   email: string | null;
   role: string;
   suspended: boolean;
+  verification_status?: string | null;
   created_at: string;
 };
 
@@ -217,26 +218,43 @@ function AdminPage() {
       .catch(console.error);
   };
 
-  const openDoc = async (path: string) => {
-    const { data } = await supabase.storage.from("verification-docs").createSignedUrl(path, 300);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  const openDoc = async (urlOrPath: string) => {
+    if (!urlOrPath) return;
+    if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://") || urlOrPath.startsWith("data:")) {
+      window.open(urlOrPath, "_blank");
+      return;
+    }
+    try {
+      const { data } = await supabase.storage.from("verification-docs").createSignedUrl(urlOrPath, 3600);
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank");
+      } else {
+        toast.error("Could not preview document");
+      }
+    } catch {
+      window.open(urlOrPath, "_blank");
+    }
   };
 
   const decide = async (userId: string, approve: boolean) => {
-    const notes = approve ? null : prompt("Reason for rejection (optional):") ?? null;
+    let notes: string | null = null;
+    if (!approve) {
+      notes = prompt("Reason for rejection (optional):") || null;
+    }
     const token = localStorage.getItem("token");
     const res = await fetch(`${BACKEND}/api/admin/verifications/${userId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ approve, notes }),
+      body: JSON.stringify({ approve, notes: notes || undefined }),
     });
     const data = await res.json();
     if (!res.ok) {
-      toast.error(data.error || "Failed to update");
+      toast.error(data.error || "Failed to update verification status");
       return;
     }
-    toast.success(approve ? "Tutor certificate verified and approved!" : "Verification rejected");
+    toast.success(approve ? "Tutor approved and is now live on Find a Tutor!" : "Verification rejected");
     loadPending();
+    loadAllData();
   };
 
   const markAsPaid = async (teacher_id: string, amount_cents: number) => {
@@ -892,42 +910,64 @@ function AdminPage() {
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</td>
                         <td className="px-4 py-3">
-                          {u.suspended ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
-                              <AlertTriangle className="size-3" /> Suspended
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                              <CheckCircle2 className="size-3" /> Active
-                            </span>
-                          )}
+                          <div className="flex flex-col gap-1 items-start">
+                            {u.suspended ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                <AlertTriangle className="size-3" /> Suspended
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                <CheckCircle2 className="size-3" /> Active
+                              </span>
+                            )}
+                            {u.role === "teacher" && (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                u.verification_status === "verified"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                              }`}>
+                                {u.verification_status === "verified" ? "✓ Verified Live" : "Unverified / Pending"}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {u.role !== "admin" ? (
-                            u.suspended ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {u.role === "teacher" && u.verification_status !== "verified" && (
                               <Button
                                 size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-8 text-xs"
-                                onClick={() => handleSuspendUser(u.id, false)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs font-semibold"
+                                onClick={() => decide(u.id, true)}
                               >
-                                <UserCheck className="size-3.5" />
-                                Reinstate
+                                Approve &amp; Go Live
                               </Button>
+                            )}
+                            {u.role !== "admin" ? (
+                              u.suspended ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-8 text-xs"
+                                  onClick={() => handleSuspendUser(u.id, false)}
+                                >
+                                  <UserCheck className="size-3.5" />
+                                  Reinstate
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-red-600 border-red-300 hover:bg-red-50 h-8 text-xs"
+                                  onClick={() => handleSuspendUser(u.id, true)}
+                                >
+                                  <UserX className="size-3.5" />
+                                  Suspend
+                                </Button>
+                              )
                             ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-red-600 border-red-300 hover:bg-red-50 h-8 text-xs"
-                                onClick={() => handleSuspendUser(u.id, true)}
-                              >
-                                <UserX className="size-3.5" />
-                                Suspend Account
-                              </Button>
-                            )
-                          ) : (
-                            <span className="text-xs text-muted-foreground font-medium italic">Admin protected</span>
-                          )}
+                              <span className="text-xs text-muted-foreground font-medium italic">Admin protected</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

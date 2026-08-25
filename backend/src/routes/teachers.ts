@@ -247,4 +247,30 @@ router.put('/teacher/profile', requireAuth, validate(teacherProfileSchema), asyn
   }
 });
 
+// POST /api/teacher/documents
+router.post('/teacher/documents', requireAuth, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = (req as any).user.id;
+    const { qualificationDocumentUrl, idDocumentUrl, certificateUrl } = req.body;
+
+    const cert = qualificationDocumentUrl || certificateUrl || null;
+    const idDoc = idDocumentUrl || null;
+
+    await pool.query(
+      `INSERT INTO teacher_profiles (user_id, qualification_document_url, id_document_url, certificate_url, verification_status)
+       VALUES ($1, $2, $3, $2, 'pending')
+       ON CONFLICT (user_id) DO UPDATE SET
+         qualification_document_url = COALESCE($2, teacher_profiles.qualification_document_url),
+         id_document_url = COALESCE($3, teacher_profiles.id_document_url),
+         certificate_url = COALESCE($2, teacher_profiles.certificate_url),
+         verification_status = 'pending'`,
+      [userId, cert, idDoc]
+    );
+
+    res.json({ message: 'Documents submitted for verification', status: 'pending' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

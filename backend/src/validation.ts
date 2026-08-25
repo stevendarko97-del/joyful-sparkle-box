@@ -111,7 +111,7 @@ export const payoutSchema = z.object({
 
 export const verificationActionSchema = z.object({
   approve: z.boolean(),
-  notes: z.string().max(500).optional(),
+  notes: z.string().max(500).optional().nullable(),
 });
 
 export const smsTestSchema = z.object({
@@ -120,7 +120,7 @@ export const smsTestSchema = z.object({
 });
 
 export const suspendUserSchema = z.object({
-  reason: z.string().max(500).optional(),
+  reason: z.string().max(500).optional().nullable(),
 });
 
 export const teacherAvailabilitySchema = z.object({
