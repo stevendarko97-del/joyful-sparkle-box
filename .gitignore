@@ -37,3 +37,6 @@ dist-ssr
 backend/.env
 backend/.env.*
 !backend/.env.example
+
+# Uploaded files (teacher certificates etc.)
+backend/uploads/

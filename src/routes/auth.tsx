@@ -4,7 +4,6 @@ import { z } from "zod";
 import { SiteNav } from "@/components/site-nav";
 import { toast } from "sonner";
 import { Eye, EyeOff, MailCheck, RefreshCw, ShieldCheck, AlertTriangle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 type ExamType = "BECE" | "WASSCE" | "NOV_DEC" | "SHS_REMEDIAL" | "JHS_REMEDIAL";
 
@@ -201,12 +200,25 @@ function AuthPage() {
         }
         let certificateUrl;
         if (role === "teacher" && certificateFile) {
-          const fileExt = certificateFile.name.split('.').pop();
-          const fileName = `${Math.random()}.${fileExt}`;
-          const filePath = `${fileName}`;
-          const { error: uploadError } = await supabase.storage.from('verification-docs').upload(filePath, certificateFile);
-          if (uploadError) throw new Error("Failed to upload certificate: " + uploadError.message);
-          certificateUrl = filePath;
+          // Upload via backend (avoids SSR env-var issues with direct Supabase client)
+          const fileBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(new Error("Failed to read file"));
+            reader.readAsDataURL(certificateFile);
+          });
+          const uploadRes = await fetch(`${BACKEND}/api/auth/upload-certificate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fileBase64,
+              fileName: certificateFile.name,
+              mimeType: certificateFile.type,
+            }),
+          });
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok) throw new Error(uploadData.error ?? "Failed to upload certificate");
+          certificateUrl = uploadData.filePath;
         }
 
         const res = await fetch(`${BACKEND}/api/auth/signup`, {

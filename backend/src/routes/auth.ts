@@ -209,7 +209,38 @@ router.post('/reset-password', authLimiter, validate(resetPasswordSchema), async
   }
 });
 
-// ── Me / Logout ───────────────────────────────────────────────────────────────
+// ── Upload Certificate (stored in PostgreSQL as base64) ───────────────────────
+// The file is stored directly as a base64 data URL in teacher_profiles.certificate_url.
+// This works on Render (no ephemeral disk) with zero external services.
+router.post('/upload-certificate', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { fileBase64, fileName, mimeType } = req.body;
+    if (!fileBase64 || !fileName) {
+      return res.status(400).json({ error: 'Missing file data' });
+    }
+
+    // Enforce a 5 MB size limit (base64 string ~ 4/3 × raw bytes)
+    const MAX_B64_LEN = 5 * 1024 * 1024 * (4 / 3);
+    if (fileBase64.length > MAX_B64_LEN) {
+      return res.status(413).json({ error: 'File too large. Maximum size is 5 MB.' });
+    }
+
+    // Ensure it includes the data URL prefix (e.g. data:application/pdf;base64,...)
+    const detectedMime = mimeType || 'application/octet-stream';
+    const dataUrl = fileBase64.startsWith('data:')
+      ? fileBase64
+      : `data:${detectedMime};base64,${fileBase64}`;
+
+    // We return the data URL as the "filePath" — it gets stored in certificate_url
+    return res.json({ filePath: dataUrl });
+  } catch (err: any) {
+    console.error('[upload-certificate]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ── Me / Logout ─────────────────────────────────────────────────────────────
 router.get('/me', requireAuth, (req: Request, res: Response) => {
   res.json({ user: (req as any).user });
 });
