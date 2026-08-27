@@ -64,11 +64,93 @@ router.get('/teacher/dashboard', requireAuth, async (req: Request, res: Response
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Student Bookings Taken (Active Schedules) ───────────────────────────────
+router.get('/student/bookings-taken', requireAuth, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const studentId = (req as any).user.id;
+    const from = new Date(); from.setHours(0, 0, 0, 0);
+    const to = new Date(from); to.setDate(from.getDate() + 14);
+    const { rows } = await pool.query(
+      `SELECT scheduled_at FROM bookings WHERE student_id = $1 AND status IN ('pending', 'confirmed') AND scheduled_at >= $2 AND scheduled_at < $3`,
+      [studentId, from.toISOString(), to.toISOString()]
+    );
+    res.json({ taken: rows });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Create Booking ────────────────────────────────────────────────────────────
 router.post('/student/bookings', requireAuth, validate(createBookingSchema), async (req: Request, res: Response): Promise<any> => {
   try {
     const studentId = (req as any).user.id;
     const { teacher_id, topic_id, scheduled_at, duration_minutes, price_cents, location } = req.body;
+
+    // 1. Self-booking prevention
+    if (studentId === teacher_id) {
+      return res.status(400).json({ error: 'You cannot book a lesson with yourself.' });
+    }
+
+    // 2. Scheduled time must be in the future
+    const bookingDate = new Date(scheduled_at);
+    if (isNaN(bookingDate.getTime()) || bookingDate.getTime() <= Date.now()) {
+      return res.status(400).json({ error: 'Selected lesson time must be in the future.' });
+    }
+
+    // 3. Teacher availability check (tutor must have published schedule)
+    const { rows: availRows } = await pool.query(
+      'SELECT day_of_week, start_hour, end_hour FROM teacher_availability WHERE teacher_id = $1',
+      [teacher_id]
+    );
+
+    if (availRows.length === 0) {
+      return res.status(400).json({
+        error: 'This tutor has not published their availability calendar yet. Please message the tutor to request a schedule.'
+      });
+    }
+
+    const dow = bookingDate.getDay();
+    const hour = bookingDate.getHours();
+    const isWithinAvailability = availRows.some(
+      (a) => a.day_of_week === dow && hour >= a.start_hour && hour < a.end_hour
+    );
+
+    if (!isWithinAvailability) {
+      return res.status(400).json({
+        error: 'The selected time slot is outside of this tutor’s published weekly schedule.'
+      });
+    }
+
+    // 4. Check for conflicting schedules for the TUTOR (no overlapping sessions)
+    const { rows: tutorConflicts } = await pool.query(
+      `SELECT id FROM bookings
+       WHERE teacher_id = $1
+         AND status IN ('pending', 'confirmed')
+         AND scheduled_at >= ($2::timestamptz - INTERVAL '59 minutes')
+         AND scheduled_at <= ($2::timestamptz + INTERVAL '59 minutes')`,
+      [teacher_id, scheduled_at]
+    );
+
+    if (tutorConflicts.length > 0) {
+      return res.status(409).json({
+        error: 'This tutor already has another session scheduled at this time. Please choose a different slot.'
+      });
+    }
+
+    // 5. Check for conflicting schedules for the STUDENT (student cannot have 2 lessons at once)
+    const { rows: studentConflicts } = await pool.query(
+      `SELECT id FROM bookings
+       WHERE student_id = $1
+         AND status IN ('pending', 'confirmed')
+         AND scheduled_at >= ($2::timestamptz - INTERVAL '59 minutes')
+         AND scheduled_at <= ($2::timestamptz + INTERVAL '59 minutes')`,
+      [studentId, scheduled_at]
+    );
+
+    if (studentConflicts.length > 0) {
+      return res.status(409).json({
+        error: 'You already have another lesson scheduled at this time. Please choose a different slot.'
+      });
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO bookings (student_id, teacher_id, topic_id, scheduled_at, duration_minutes, price_cents, status, location)
        VALUES ($1,$2,$3,$4,$5,$6,'pending',$7) RETURNING id`,
@@ -100,7 +182,9 @@ router.get('/bookings/:id', requireAuth, async (req: Request, res: Response): Pr
     );
     const b = rows[0];
     if (!b) return res.status(404).json({ error: 'Not found' });
-    if (b.student_id !== userId && b.teacher_id !== userId) return res.status(403).json({ error: 'Forbidden' });
+    if (b.student_id !== userId && b.teacher_id !== userId && (req as any).user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     res.json({ booking: b, other_name: b.student_id === userId ? b.teacher_name : b.student_name });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -145,12 +229,63 @@ router.put('/student/bookings/:id/reschedule', requireAuth, validate(rescheduleB
   try {
     const userId = (req as any).user.id;
     const userRole = (req as any).user.role;
+    const { scheduled_at } = req.body;
+
     const { rows: existing } = await pool.query('SELECT * FROM bookings WHERE id = $1', [req.params.id]);
     if (!existing.length) return res.status(404).json({ error: 'Booking not found' });
     const b = existing[0];
     if (b.student_id !== userId && userRole !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    await pool.query('UPDATE bookings SET scheduled_at=$1 WHERE id=$2', [req.body.scheduled_at, req.params.id]);
-    res.json({ message: 'Booking rescheduled' });
+
+    const newDate = new Date(scheduled_at);
+    if (isNaN(newDate.getTime()) || newDate.getTime() <= Date.now()) {
+      return res.status(400).json({ error: 'Rescheduled time must be in the future.' });
+    }
+
+    // 1. Check tutor availability schedule
+    const { rows: availRows } = await pool.query(
+      'SELECT day_of_week, start_hour, end_hour FROM teacher_availability WHERE teacher_id = $1',
+      [b.teacher_id]
+    );
+    if (availRows.length === 0) {
+      return res.status(400).json({ error: 'This tutor has not published their availability schedule.' });
+    }
+    const dow = newDate.getDay();
+    const hour = newDate.getHours();
+    const isWithin = availRows.some(a => a.day_of_week === dow && hour >= a.start_hour && hour < a.end_hour);
+    if (!isWithin) {
+      return res.status(400).json({ error: 'The selected slot is outside the tutor’s published weekly schedule.' });
+    }
+
+    // 2. Check tutor conflict (excluding this booking)
+    const { rows: tutorConflicts } = await pool.query(
+      `SELECT id FROM bookings
+       WHERE teacher_id = $1
+         AND id != $2
+         AND status IN ('pending', 'confirmed')
+         AND scheduled_at >= ($3::timestamptz - INTERVAL '59 minutes')
+         AND scheduled_at <= ($3::timestamptz + INTERVAL '59 minutes')`,
+      [b.teacher_id, req.params.id, scheduled_at]
+    );
+    if (tutorConflicts.length > 0) {
+      return res.status(409).json({ error: 'The tutor already has another session booked at this new time slot.' });
+    }
+
+    // 3. Check student conflict (excluding this booking)
+    const { rows: studentConflicts } = await pool.query(
+      `SELECT id FROM bookings
+       WHERE student_id = $1
+         AND id != $2
+         AND status IN ('pending', 'confirmed')
+         AND scheduled_at >= ($3::timestamptz - INTERVAL '59 minutes')
+         AND scheduled_at <= ($3::timestamptz + INTERVAL '59 minutes')`,
+      [b.student_id, req.params.id, scheduled_at]
+    );
+    if (studentConflicts.length > 0) {
+      return res.status(409).json({ error: 'You already have another lesson scheduled at this new time slot.' });
+    }
+
+    await pool.query('UPDATE bookings SET scheduled_at=$1 WHERE id=$2', [scheduled_at, req.params.id]);
+    res.json({ message: 'Booking rescheduled successfully' });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

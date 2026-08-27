@@ -310,7 +310,9 @@ function TeacherDetail() {
             <div className="rounded-2xl bg-card p-5 ring-1 ring-black/5">
               <h3 className="font-semibold text-sm mb-4">Weekly Availability</h3>
               {weeklyAvailability.length === 0 ? (
-                <p className="text-xs text-muted-foreground">This tutor hasn't published availability yet. Book a session to request a time.</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  This tutor hasn't published their weekly availability schedule yet. You can message them directly to discuss lesson times.
+                </p>
               ) : (
                 <div className="space-y-2">
                   {weeklyAvailability.map(({ day, slots }) => (

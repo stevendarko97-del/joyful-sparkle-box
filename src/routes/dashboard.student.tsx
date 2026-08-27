@@ -182,8 +182,15 @@ function StudentDashboard() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ scheduled_at: new Date(newDate).toISOString() }),
     });
-    if (res.ok) { toast.success("Rescheduled!"); setRescheduleBooking(null); setNewDate(""); loadDashboard(); }
-    else toast.error("Failed to reschedule");
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      toast.success("Lesson rescheduled successfully!");
+      setRescheduleBooking(null);
+      setNewDate("");
+      loadDashboard();
+    } else {
+      toast.error(data.error || "Failed to reschedule lesson");
+    }
   };
 
   const submitReview = async () => {
