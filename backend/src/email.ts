@@ -1,16 +1,37 @@
 import nodemailer from 'nodemailer';
 
 function createSmtpTransporter() {
-  const host = process.env.SMTP_HOST || (process.env.GMAIL_USER ? 'smtp.gmail.com' : null);
+  const host = process.env.SMTP_HOST;
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const user = process.env.SMTP_USER || process.env.GMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASS;
+  const rawPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASS;
+  const pass = rawPass ? rawPass.replace(/\s+/g, '') : undefined; // Remove spaces that Google App Passwords often have
   const from = process.env.SMTP_FROM || `"QuickTutor Ghana" <${user || 'no-reply@quicktutor.com'}>`;
 
-  if (!host || !user || !pass) return null;
+  if (!user || !pass) {
+    console.warn(`[Email] Missing email credentials (GMAIL_USER: ${!!user}, GMAIL_APP_PASS: ${!!pass})`);
+    return null;
+  }
+
+  // If using Gmail directly without custom SMTP host, use nodemailer's built-in 'gmail' service
+  if (!host || host.includes('gmail')) {
+    return {
+      transporter: nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user, pass },
+      }),
+      from,
+    };
+  }
 
   return {
-    transporter: nodemailer.createTransport({ host, port, secure: port === 465, auth: { user, pass } }),
+    transporter: nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
+    }),
     from,
   };
 }

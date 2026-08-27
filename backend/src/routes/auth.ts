@@ -83,8 +83,13 @@ router.post('/signup', authLimiter, validate(signupSchema), async (req: Request,
     }
 
     const host = req.get('origin') || `${req.protocol}://${req.get('host')}` || 'https://quicktutor-ghana.onrender.com';
-    const verificationLink = `${host}/auth/verify-email?token=${verificationToken}`;
-    await sendVerificationEmail(user.email, verificationLink);
+    // NOTE: must point to /api/auth/verify-email (the backend API), not /auth/verify-email (the frontend)
+    const verificationLink = `${host}/api/auth/verify-email?token=${verificationToken}`;
+    const emailSent = await sendVerificationEmail(user.email, verificationLink);
+    if (!emailSent) {
+      console.error(`[Signup] ⚠️ Verification email FAILED for ${user.email}. Check GMAIL_USER/GMAIL_APP_PASS env vars.`);
+      console.log(`[Signup] 📧 Manual verification link: ${verificationLink}`);
+    }
 
     return res.status(201).json({ message: 'signup_pending_verification', email: user.email });
   } catch (err: any) {
@@ -133,7 +138,12 @@ router.post('/resend-verification', authLimiter, validate(resendVerificationSche
     await pool.query('UPDATE local_users SET verification_token = $1 WHERE id = $2', [verificationToken, user.id]);
 
     const host = req.get('origin') || `${req.protocol}://${req.get('host')}` || 'https://quicktutor-ghana.onrender.com';
-    await sendVerificationEmail(user.email, `${host}/auth/verify-email?token=${verificationToken}`);
+    const verificationLink = `${host}/api/auth/verify-email?token=${verificationToken}`;
+    const emailSent = await sendVerificationEmail(user.email, verificationLink);
+    if (!emailSent) {
+      console.error(`[Resend] ⚠️ Verification email FAILED for ${user.email}. Check GMAIL_USER/GMAIL_APP_PASS env vars.`);
+      console.log(`[Resend] 📧 Manual verification link: ${verificationLink}`);
+    }
 
     return res.json({ message: 'If unverified, a new link has been sent.' });
   } catch (err: any) {
