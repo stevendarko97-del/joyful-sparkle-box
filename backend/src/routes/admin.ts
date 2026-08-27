@@ -193,12 +193,21 @@ router.post('/users/:userId/unsuspend', async (_req: Request, res: Response): Pr
 router.get('/verifications', async (_req: Request, res: Response): Promise<any> => {
   try {
     const { rows } = await pool.query(
-      `SELECT t.user_id, t.id_document_url, t.qualification_document_url, t.verification_status, p.full_name
+      `SELECT t.user_id, t.id_document_url,
+              COALESCE(t.qualification_document_url, t.certificate_url) as qualification_document_url,
+              t.certificate_url, t.verification_status, p.full_name
        FROM teacher_profiles t JOIN profiles p ON t.user_id = p.id
        WHERE t.verification_status IN ('pending', 'unverified')
-       ORDER BY t.created_at DESC`
+       ORDER BY p.created_at DESC`
     );
-    res.json({ pending: rows.map((r) => ({ user_id: r.user_id, id_document_url: r.id_document_url, qualification_document_url: r.qualification_document_url, verification_status: r.verification_status, profiles: { full_name: r.full_name } })) });
+    res.json({ pending: rows.map((r) => ({
+      user_id: r.user_id,
+      id_document_url: r.id_document_url,
+      qualification_document_url: r.qualification_document_url,
+      certificate_url: r.certificate_url,
+      verification_status: r.verification_status,
+      profiles: { full_name: r.full_name }
+    })) });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

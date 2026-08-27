@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { SiteNav } from "@/components/site-nav";
+import { SiteNav, SiteFooter } from "@/components/site-nav";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -224,20 +223,31 @@ function AdminPage() {
 
   const openDoc = async (urlOrPath: string) => {
     if (!urlOrPath) return;
-    if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://") || urlOrPath.startsWith("data:")) {
+    if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) {
       window.open(urlOrPath, "_blank");
       return;
     }
-    try {
-      const { data } = await supabase.storage.from("verification-docs").createSignedUrl(urlOrPath, 3600);
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, "_blank");
-      } else {
-        toast.error("Could not preview document");
+    if (urlOrPath.startsWith("data:")) {
+      try {
+        const parts = urlOrPath.split(",");
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : "application/pdf";
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+        return;
+      } catch {
+        window.open(urlOrPath, "_blank");
+        return;
       }
-    } catch {
-      window.open(urlOrPath, "_blank");
     }
+    window.open(urlOrPath, "_blank");
   };
 
   const decide = async (userId: string, approve: boolean) => {

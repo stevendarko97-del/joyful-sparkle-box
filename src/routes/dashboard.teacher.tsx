@@ -33,7 +33,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { ReportDialog } from "@/components/report-dialog";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/dashboard/teacher")({ component: TeacherDashboard });
 
@@ -105,20 +104,31 @@ function TeacherDashboard() {
 
   const openDoc = async (urlOrPath: string) => {
     if (!urlOrPath) return;
-    if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://") || urlOrPath.startsWith("data:")) {
+    if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) {
       window.open(urlOrPath, "_blank");
       return;
     }
-    try {
-      const { data } = await supabase.storage.from("verification-docs").createSignedUrl(urlOrPath, 3600);
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, "_blank");
-      } else {
-        toast.error("Could not preview document");
+    if (urlOrPath.startsWith("data:")) {
+      try {
+        const parts = urlOrPath.split(",");
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : "application/pdf";
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+        return;
+      } catch {
+        window.open(urlOrPath, "_blank");
+        return;
       }
-    } catch {
-      window.open(urlOrPath, "_blank");
     }
+    window.open(urlOrPath, "_blank");
   };
 
   const handleUploadDocuments = async (e: React.FormEvent) => {
@@ -129,37 +139,37 @@ function TeacherDashboard() {
     }
     setUploadingDocs(true);
     try {
-      let certUrl = dashData?.teacherProfile?.qualification_document_url || null;
+      let certUrl = dashData?.teacherProfile?.qualification_document_url || dashData?.teacherProfile?.certificate_url || null;
       let idUrl = dashData?.teacherProfile?.id_document_url || null;
 
       if (certFile) {
-        const fileExt = certFile.name.split(".").pop();
-        const fileName = `${user?.id}/cert-${Date.now()}.${fileExt}`;
-        const { error: upErr } = await supabase.storage.from("verification-docs").upload(fileName, certFile, { upsert: true });
-        if (!upErr) {
-          certUrl = fileName;
-        } else {
-          certUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(certFile);
-          });
+        // Enforce 5MB limit
+        if (certFile.size > 5 * 1024 * 1024) {
+          toast.error("Certificate file exceeds 5 MB. Please select a smaller file.");
+          setUploadingDocs(false);
+          return;
         }
+        certUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Failed to read certificate file"));
+          reader.readAsDataURL(certFile);
+        });
       }
 
       if (idFile) {
-        const fileExt = idFile.name.split(".").pop();
-        const fileName = `${user?.id}/id-${Date.now()}.${fileExt}`;
-        const { error: upErr } = await supabase.storage.from("verification-docs").upload(fileName, idFile, { upsert: true });
-        if (!upErr) {
-          idUrl = fileName;
-        } else {
-          idUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(idFile);
-          });
+        // Enforce 5MB limit
+        if (idFile.size > 5 * 1024 * 1024) {
+          toast.error("ID document file exceeds 5 MB. Please select a smaller file.");
+          setUploadingDocs(false);
+          return;
         }
+        idUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Failed to read ID document file"));
+          reader.readAsDataURL(idFile);
+        });
       }
 
       const token = localStorage.getItem("token");
