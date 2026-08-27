@@ -222,3 +222,15 @@ export async function sendSupportResolvedSms(params: {
   const msg = `QuickTutor Support: Your ticket "${params.subject}" was resolved by Admin${notesText} Check your dashboard for details.`;
   await sendSms(params.phone, msg);
 }
+
+export async function sendVerificationSms(params: {
+  phone: string | null;
+  name: string;
+  verificationLink: string;
+}) {
+  if (!params.phone) return;
+  const firstName = params.name ? params.name.split(' ')[0] : 'there';
+  const msg = `Welcome to QuickTutor Ghana, ${firstName}! Please verify your account by opening this link: ${params.verificationLink}`;
+  await sendSms(params.phone, msg);
+}
+

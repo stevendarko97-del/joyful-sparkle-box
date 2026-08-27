@@ -5,7 +5,7 @@ import { pool } from '../db';
 import { authLimiter } from '../middleware/rateLimits';
 import { requireAuth } from '../middleware/auth';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../email';
-import { sendSms } from '../sms';
+import { sendSms, sendVerificationSms } from '../sms';
 import {
   validate,
   signupSchema,
@@ -91,6 +91,10 @@ router.post('/signup', authLimiter, validate(signupSchema), async (req: Request,
       console.log(`[Signup] 📧 Manual verification link: ${verificationLink}`);
     }
 
+    if (phone) {
+      sendVerificationSms({ phone, name: fullName, verificationLink }).catch(e => console.error('[Signup] SMS error:', e));
+    }
+
     return res.status(201).json({ message: 'signup_pending_verification', email: user.email });
   } catch (err: any) {
     if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
@@ -143,6 +147,12 @@ router.post('/resend-verification', authLimiter, validate(resendVerificationSche
     if (!emailSent) {
       console.error(`[Resend] ⚠️ Verification email FAILED for ${user.email}. Check GMAIL_USER/GMAIL_APP_PASS env vars.`);
       console.log(`[Resend] 📧 Manual verification link: ${verificationLink}`);
+    }
+
+    // Also attempt SMS resend if user has phone on file
+    const { rows: profRows } = await pool.query('SELECT full_name, phone FROM profiles WHERE id = $1', [user.id]);
+    if (profRows.length > 0 && profRows[0].phone) {
+      sendVerificationSms({ phone: profRows[0].phone, name: profRows[0].full_name, verificationLink }).catch(e => console.error('[Resend] SMS error:', e));
     }
 
     return res.json({ message: 'If unverified, a new link has been sent.' });
