@@ -366,8 +366,6 @@ app.get('/api/health', (_req: Request, res: Response) => {
       ALTER TABLE local_users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false;
       ALTER TABLE local_users ADD COLUMN IF NOT EXISTS verification_token TEXT;
     `);
-    // Backfill existing users as verified (only new signups need to verify)
-    await pool.query(`UPDATE local_users SET email_verified = true WHERE email_verified IS NULL OR email_verified = false;`);
 
     // Auto-seed / promote admin account
     const adminEmail = 'stevendarko97@gmail.com';
