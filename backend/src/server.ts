@@ -52,13 +52,17 @@ const rooms = new Map<string, Set<string>>();
 
 io.on('connection', async (socket) => {
   const { room: bookingId, token } = socket.handshake.query as Record<string, string>;
-  if (!bookingId) { socket.disconnect(); return; }
+  if (!bookingId) {
+    socket.emit('error', { message: 'Missing room ID' });
+    socket.disconnect();
+    return;
+  }
 
   let decoded: any;
   try {
     decoded = jwt.verify(token, JWT_SECRET);
   } catch {
-    socket.emit('error', { message: 'Invalid or expired session token' });
+    socket.emit('error', { message: 'Invalid or expired session token. Please log in again.' });
     socket.disconnect();
     return;
   }
@@ -68,22 +72,67 @@ io.on('connection', async (socket) => {
       'SELECT status, student_id, teacher_id, paystack_reference FROM bookings WHERE id = $1',
       [bookingId]
     );
-    if (!bCheck.length) { socket.emit('error', { message: 'Booking not found' }); socket.disconnect(); return; }
+    if (!bCheck.length) {
+      socket.emit('error', { message: 'Booking not found' });
+      socket.disconnect();
+      return;
+    }
     const booking = bCheck[0];
-    if (booking.status === 'pending' || !booking.paystack_reference) { socket.emit('error', { message: 'Payment required before entering live classroom' }); socket.disconnect(); return; }
-    if (booking.status === 'cancelled') { socket.emit('error', { message: 'This booking has been cancelled' }); socket.disconnect(); return; }
-    if (decoded.id !== booking.student_id && decoded.id !== booking.teacher_id) { socket.emit('error', { message: 'You are not a participant in this booking' }); socket.disconnect(); return; }
-  } catch (e) { socket.emit('error', { message: 'Failed to validate booking' }); socket.disconnect(); return; }
+    if (booking.status === 'cancelled') {
+      socket.emit('error', { message: 'This lesson has been cancelled.' });
+      socket.disconnect();
+      return;
+    }
+    if (booking.status === 'pending' && !booking.paystack_reference) {
+      socket.emit('error', { message: 'Payment is required before entering the live classroom.' });
+      socket.disconnect();
+      return;
+    }
+    if (decoded.id !== booking.student_id && decoded.id !== booking.teacher_id && decoded.role !== 'admin') {
+      socket.emit('error', { message: 'You are not a participant in this lesson booking.' });
+      socket.disconnect();
+      return;
+    }
+  } catch (e) {
+    socket.emit('error', { message: 'Failed to validate booking status.' });
+    socket.disconnect();
+    return;
+  }
 
   if (!rooms.has(bookingId)) rooms.set(bookingId, new Set());
   const room = rooms.get(bookingId)!;
   room.add(socket.id);
   socket.join(bookingId);
+
+  // Notify the joining socket that they successfully entered the classroom
+  socket.emit('joined', { bookingId, peerCount: room.size });
+
+  // Notify other participants in the room
   socket.to(bookingId).emit('peer-joined', { socketId: socket.id });
 
+  // WebRTC SDP Offer / Answer
   socket.on('offer', (data) => socket.to(bookingId).emit('offer', { ...data, from: socket.id }));
   socket.on('answer', (data) => socket.to(bookingId).emit('answer', { ...data, from: socket.id }));
-  socket.on('ice-candidate', (data) => socket.to(bookingId).emit('ice-candidate', { ...data, from: socket.id }));
+
+  // WebRTC ICE Candidates (handle both 'ice' and 'ice-candidate')
+  socket.on('ice', (data) => {
+    socket.to(bookingId).emit('ice', { ...data, from: socket.id });
+    socket.to(bookingId).emit('ice-candidate', { ...data, from: socket.id });
+  });
+  socket.on('ice-candidate', (data) => {
+    socket.to(bookingId).emit('ice', { ...data, from: socket.id });
+    socket.to(bookingId).emit('ice-candidate', { ...data, from: socket.id });
+  });
+
+  // Classroom Live Chat
+  socket.on('chat', (data) => socket.to(bookingId).emit('chat', data));
+
+  // Classroom Interactive Whiteboard
+  socket.on('draw-start', (data) => socket.to(bookingId).emit('draw-start', data));
+  socket.on('draw', (data) => socket.to(bookingId).emit('draw', data));
+  socket.on('draw-clear', () => socket.to(bookingId).emit('draw-clear'));
+  socket.on('whiteboard-toggle', (data) => socket.to(bookingId).emit('whiteboard-toggle', data));
+
   socket.on('disconnect', () => {
     room.delete(socket.id);
     if (room.size === 0) rooms.delete(bookingId);

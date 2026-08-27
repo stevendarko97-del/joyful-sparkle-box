@@ -312,8 +312,11 @@ function LessonRoom() {
       // 2. Connect to Socket.IO with the JWT token
       const token = localStorage.getItem("token");
       const socket = io(BACKEND, {
+        path: "/socket.io",
         query: { room: bookingId, token: token ?? "" },
         transports: ["websocket", "polling"],
+        reconnectionAttempts: 5,
+        timeout: 10000,
       });
       socketRef.current = socket;
 
