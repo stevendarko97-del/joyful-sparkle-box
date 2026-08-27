@@ -34,6 +34,20 @@ import { getBackendUrl } from "@/lib/config";
 
 const BACKEND = getBackendUrl();
 
+// Safely parse JSON — if the server returns HTML (e.g. 413/502 error pages)
+// instead of JSON, this returns a friendly error object instead of crashing.
+async function safeJson(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error("[safeJson] Non-JSON response:", text.slice(0, 200));
+    if (res.status === 413) return { error: "File too large. Please upload a smaller certificate (max 5 MB)." };
+    if (res.status === 0 || !res.status) return { error: "Cannot reach the server. Check your internet connection." };
+    return { error: `Server error (${res.status}). Please try again.` };
+  }
+}
+
 const fieldClass = "mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand";
 
 // ── Password strength helper ────────────────────────────────────────────────
@@ -216,7 +230,7 @@ function AuthPage() {
               mimeType: certificateFile.type,
             }),
           });
-          const uploadData = await uploadRes.json();
+          const uploadData = await safeJson(uploadRes);
           if (!uploadRes.ok) throw new Error(uploadData.error ?? "Failed to upload certificate");
           certificateUrl = uploadData.filePath;
         }
@@ -247,7 +261,7 @@ function AuthPage() {
             certificateUrl: role === "teacher" ? certificateUrl : undefined,
           }),
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) throw new Error(data.error ?? "Signup failed");
         // Backend returns pending verification — show confirmation screen
         if (data.message === "signup_pending_verification") {
@@ -261,7 +275,7 @@ function AuthPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (res.status === 403 && data.error === "email_not_verified") {
           setUnverifiedEmail(data.email ?? email);
           return;
