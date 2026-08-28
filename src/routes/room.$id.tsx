@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { io, Socket } from "socket.io-client";
 import { toast } from "sonner";
-import { Mic, MicOff, Video, VideoOff, Monitor, PhoneOff, MessageSquare, Users, Pencil, AlertCircle, CheckCircle2, Sparkles, X, ShieldCheck, Lock, CreditCard, Clock } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, Monitor, PhoneOff, MessageSquare, Users, Pencil, Eraser, AlertCircle, CheckCircle2, Sparkles, X, ShieldCheck, Lock, CreditCard, Clock } from "lucide-react";
 import { ReportDialog } from "@/components/report-dialog";
 
 export const Route = createFileRoute("/room/$id")({
@@ -108,6 +108,9 @@ function LessonRoom() {
 
   // Whiteboard
   const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [wbTool, setWbTool] = useState<"pen" | "eraser">("pen");
+  const [wbColor, setWbColor] = useState("#991b1b");
+  const [wbSize, setWbSize] = useState(3);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
 
@@ -401,26 +404,31 @@ function LessonRoom() {
         setMessages((m) => [...m, { id: `${ts}-remote`, sender: senderName, text, ts }]);
       });
 
-      socket.on("draw-start", ({ x, y, width, height }: { x: number; y: number, width: number, height: number }) => {
+      socket.on("draw-start", ({ x, y, width, height, color, size }: { x: number; y: number; width: number; height: number; color?: string; size?: number }) => {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
         if (canvas && ctx) {
           const scaleX = canvas.width / width;
           const scaleY = canvas.height / height;
           ctx.beginPath();
+          ctx.strokeStyle = color || "#991b1b";
+          ctx.lineWidth = size || 2;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
           ctx.moveTo(x * scaleX, y * scaleY);
         }
       });
 
-      socket.on("draw", ({ x, y, width, height }: { x: number; y: number, width: number, height: number }) => {
+      socket.on("draw", ({ x, y, width, height, color, size }: { x: number; y: number; width: number; height: number; color?: string; size?: number }) => {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext("2d");
         if (canvas && ctx) {
           const scaleX = canvas.width / width;
           const scaleY = canvas.height / height;
-          ctx.strokeStyle = "#991b1b";
-          ctx.lineWidth = 2;
+          ctx.strokeStyle = color || "#991b1b";
+          ctx.lineWidth = size || 2;
           ctx.lineCap = "round";
+          ctx.lineJoin = "round";
           ctx.lineTo(x * scaleX, y * scaleY);
           ctx.stroke();
         }
@@ -577,10 +585,16 @@ function LessonRoom() {
     const { x, y } = getCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
+    const strokeColor = wbTool === "eraser" ? "#ffffff" : wbColor;
+    const strokeSize = wbTool === "eraser" ? 28 : wbSize;
     if (ctx && canvas) {
       ctx.beginPath();
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = strokeSize;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.moveTo(x, y);
-      socketRef.current?.emit("draw-start", { x, y, width: canvas.width, height: canvas.height });
+      socketRef.current?.emit("draw-start", { x, y, width: canvas.width, height: canvas.height, color: strokeColor, size: strokeSize });
     }
   };
 
@@ -589,10 +603,16 @@ function LessonRoom() {
     const { x, y } = getTouchCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
+    const strokeColor = wbTool === "eraser" ? "#ffffff" : wbColor;
+    const strokeSize = wbTool === "eraser" ? 28 : wbSize;
     if (ctx && canvas) {
       ctx.beginPath();
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = strokeSize;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.moveTo(x, y);
-      socketRef.current?.emit("draw-start", { x, y, width: canvas.width, height: canvas.height });
+      socketRef.current?.emit("draw-start", { x, y, width: canvas.width, height: canvas.height, color: strokeColor, size: strokeSize });
     }
   };
   
@@ -601,13 +621,16 @@ function LessonRoom() {
     const { x, y } = getCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
+    const strokeColor = wbTool === "eraser" ? "#ffffff" : wbColor;
+    const strokeSize = wbTool === "eraser" ? 28 : wbSize;
     if (ctx && canvas) {
-      ctx.strokeStyle = "#991b1b";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = strokeSize;
       ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.lineTo(x, y);
       ctx.stroke();
-      socketRef.current?.emit("draw", { x, y, width: canvas.width, height: canvas.height });
+      socketRef.current?.emit("draw", { x, y, width: canvas.width, height: canvas.height, color: strokeColor, size: strokeSize });
     }
   };
 
@@ -616,13 +639,16 @@ function LessonRoom() {
     const { x, y } = getTouchCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
+    const strokeColor = wbTool === "eraser" ? "#ffffff" : wbColor;
+    const strokeSize = wbTool === "eraser" ? 28 : wbSize;
     if (ctx && canvas) {
-      ctx.strokeStyle = "#991b1b";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = strokeSize;
       ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.lineTo(x, y);
       ctx.stroke();
-      socketRef.current?.emit("draw", { x, y, width: canvas.width, height: canvas.height });
+      socketRef.current?.emit("draw", { x, y, width: canvas.width, height: canvas.height, color: strokeColor, size: strokeSize });
     }
   };
   
@@ -821,16 +847,72 @@ function LessonRoom() {
               {/* Whiteboard overlay */}
               {showWhiteboard && (
                 <div className="absolute inset-0 z-30 flex flex-col bg-white">
-                  <div className="flex shrink-0 items-center justify-between bg-zinc-900 px-3 sm:px-4 py-2.5 border-b border-white/10">
+                  <div className="flex shrink-0 items-center justify-between bg-zinc-900 px-3 sm:px-4 py-2 border-b border-white/10 flex-wrap gap-2">
+                    {/* Left: Title & Mode */}
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-white">Whiteboard (Live sync)</span>
+                      <span className="text-xs font-semibold text-white">Whiteboard</span>
                       <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/70">
                         {isTeacher ? "Teacher Control" : "Student View & Draw"}
                       </span>
                     </div>
+
+                    {/* Middle: Drawing Tools (Pen, Eraser, Colors) */}
+                    <div className="flex items-center gap-1 sm:gap-2 bg-zinc-800/90 px-2.5 py-1 rounded-xl border border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setWbTool("pen")}
+                        title="Pen"
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          wbTool === "pen"
+                            ? "bg-brand text-white shadow-sm ring-1 ring-white/20"
+                            : "text-white/60 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        <Pencil className="size-3.5" />
+                        <span>Pen</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWbTool("eraser")}
+                        title="Eraser (Clean strokes)"
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          wbTool === "eraser"
+                            ? "bg-brand text-white shadow-sm ring-1 ring-white/20"
+                            : "text-white/60 hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        <Eraser className="size-3.5" />
+                        <span>Eraser</span>
+                      </button>
+
+                      {wbTool === "pen" && (
+                        <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-white/20">
+                          {[
+                            { color: "#991b1b", label: "Crimson" },
+                            { color: "#18181b", label: "Black" },
+                            { color: "#2563eb", label: "Blue" },
+                            { color: "#16a34a", label: "Green" },
+                          ].map((c) => (
+                            <button
+                              key={c.color}
+                              type="button"
+                              onClick={() => setWbColor(c.color)}
+                              title={c.label}
+                              className={`size-4 sm:size-5 rounded-full transition-all ${
+                                wbColor === c.color ? "scale-125 ring-2 ring-white shadow-sm" : "opacity-60 hover:opacity-100"
+                              }`}
+                              style={{ backgroundColor: c.color }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Clear Board (Teacher only) & Close */}
                     <div className="flex items-center gap-2">
                       {isTeacher && (
                         <button
+                          type="button"
                           onClick={clearWhiteboard}
                           className="rounded-lg px-2.5 py-1 text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors"
                         >
@@ -838,6 +920,7 @@ function LessonRoom() {
                         </button>
                       )}
                       <button
+                        type="button"
                         onClick={() => setShowWhiteboard(false)}
                         className="rounded-lg px-2.5 py-1 text-xs font-medium bg-red-600/80 text-white hover:bg-red-600 transition-colors"
                       >
