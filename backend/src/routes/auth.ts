@@ -27,8 +27,9 @@ router.post('/signup', authLimiter, validate(signupSchema), async (req: Request,
       headline, yearsExperience, hourlyRate, primarySubject, examTypes, languages, certificateUrl,
     } = req.body;
 
+    const cleanEmail = email.trim().toLowerCase();
     const verificationToken = jwt.sign(
-      { email: email.trim().toLowerCase(), purpose: 'verify_email' },
+      { email: cleanEmail, purpose: 'verify_email' },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -36,7 +37,7 @@ router.post('/signup', authLimiter, validate(signupSchema), async (req: Request,
     const password_hash = await bcrypt.hash(password, 10);
     const userRes = await pool.query(
       'INSERT INTO local_users (email, password_hash, email_verified, verification_token) VALUES ($1, $2, false, $3) RETURNING id, email',
-      [email, password_hash, verificationToken]
+      [cleanEmail, password_hash, verificationToken]
     );
     const user = userRes.rows[0];
 
@@ -249,6 +250,18 @@ router.post('/upload-certificate', async (req: Request, res: Response): Promise<
   }
 });
 
+
+// ── Diagnostic: Test Email Configuration ─────────────────────────────────────
+router.get('/test-email', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const to = (req.query.to as string) || 'stevendarko97@gmail.com';
+    const { testSmtpConnection } = await import('../email');
+    const result = await testSmtpConnection(to);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
 
 // ── Me / Logout ─────────────────────────────────────────────────────────────
 router.get('/me', requireAuth, (req: Request, res: Response) => {

@@ -305,14 +305,19 @@ function AuthPage() {
   const handleResendVerification = async (emailToResend: string) => {
     setResendBusy(true);
     try {
-      await fetch(`${BACKEND}/api/auth/resend-verification`, {
+      const res = await fetch(`${BACKEND}/api/auth/resend-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailToResend }),
       });
-      toast.success("Verification email resent! Check your inbox.");
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success("Verification email resent! Please check your inbox and spam folder.");
+      } else {
+        toast.error(data.error || "Could not resend verification email.");
+      }
     } catch {
-      toast.error("Could not resend. Please try again.");
+      toast.error("Could not resend. Please check your network connection.");
     } finally {
       setResendBusy(false);
     }

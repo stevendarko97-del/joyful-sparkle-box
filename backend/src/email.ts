@@ -78,31 +78,30 @@ export async function sendVerificationEmail(toEmail: string, verificationLink: s
 
   if (smtp) {
     try {
-      await smtp.transporter.sendMail({
+      const info = await smtp.transporter.sendMail({
         from: smtp.from,
         to: toEmail,
-        subject: 'QuickTutor Ghana - Verify Your Email Address',
+        replyTo: smtp.from,
+        subject: 'Verify your QuickTutor Ghana account',
         text: `Hello,\n\nThank you for creating an account on QuickTutor Ghana!\n\nPlease verify your email address by clicking the link below:\n${verificationLink}\n\nThis link will expire in 24 hours.\n\nIf you did not create an account, please ignore this email.\n\nBest regards,\nQuickTutor Ghana Team`,
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-            <h2 style="color: #7b1113;">Welcome to QuickTutor Ghana! 🎉</h2>
-            <p>Hello,</p>
-            <p>Thank you for creating an account. You're almost ready to get started!</p>
-            <p>Please verify your email address to activate your account:</p>
-            <p style="margin: 25px 0;">
-              <a href="${verificationLink}" style="background-color: #7b1113; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 15px;">Verify My Email</a>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+            <h2 style="color: #7b1113; margin-top: 0;">QuickTutor Ghana</h2>
+            <p style="font-size: 15px; color: #1e293b;">Hello,</p>
+            <p style="font-size: 14px; color: #334155; line-height: 1.6;">Thank you for registering on QuickTutor Ghana. Please click the button below to verify your email address and activate your account:</p>
+            <p style="margin: 28px 0; text-align: center;">
+              <a href="${verificationLink}" style="background-color: #7b1113; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 15px;">Verify My Email</a>
             </p>
-            <p style="color: #666; font-size: 13px;">Or copy and paste this link into your browser:<br/><a href="${verificationLink}">${verificationLink}</a></p>
-            <p style="color: #999; font-size: 12px; margin-top: 30px;">This link expires in 24 hours. If you did not create this account, you can safely ignore this email.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;"/>
-            <p style="color: #999; font-size: 11px;">QuickTutor Ghana &mdash; Connecting Students with Expert Tutors</p>
+            <p style="color: #64748b; font-size: 13px; line-height: 1.5;">Or copy and paste this link into your web browser:<br/><a href="${verificationLink}" style="color: #7b1113; word-break: break-all;">${verificationLink}</a></p>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;"/>
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">This verification link will expire in 24 hours. If you did not create an account, please ignore this email.</p>
           </div>
         `,
       });
-      console.log(`[Email] ✅ Verification email sent successfully to ${toEmail}`);
+      console.log(`[Email] ✅ Verification email sent to ${toEmail} (messageId: ${info.messageId})`);
       return true;
-    } catch (err) {
-      console.error(`[Email] ❌ Failed to send verification email to ${toEmail}:`, err);
+    } catch (err: any) {
+      console.error(`[Email] ❌ Failed to send verification email to ${toEmail}:`, err?.message || err);
     }
   }
 
@@ -111,6 +110,33 @@ export async function sendVerificationEmail(toEmail: string, verificationLink: s
   console.log(`${verificationLink}`);
   console.log(`======================================================\n`);
   return false;
+}
+
+export async function testSmtpConnection(targetEmail: string): Promise<{ success: boolean; message: string; details?: any }> {
+  const smtp = createSmtpTransporter();
+  if (!smtp) {
+    return { success: false, message: 'SMTP credentials missing (GMAIL_USER or GMAIL_APP_PASS not set)' };
+  }
+  try {
+    const verifyResult = await smtp.transporter.verify();
+    const sendResult = await smtp.transporter.sendMail({
+      from: smtp.from,
+      to: targetEmail,
+      subject: 'QuickTutor Ghana - SMTP Test Email',
+      text: 'This is a test email confirming that your QuickTutor SMTP email system is working perfectly.',
+    });
+    return {
+      success: true,
+      message: `Test email successfully sent to ${targetEmail}`,
+      details: { verifyResult, messageId: sendResult.messageId, response: sendResult.response }
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `SMTP Error: ${err.message}`,
+      details: { code: err.code, response: err.response, stack: err.stack }
+    };
+  }
 }
 
 export async function sendPaymentReceiptEmail(
