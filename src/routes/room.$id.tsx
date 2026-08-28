@@ -108,6 +108,8 @@ function LessonRoom() {
 
   // Whiteboard
   const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [wbOwnerId, setWbOwnerId] = useState<string | null>(null);
+  const [wbOwnerName, setWbOwnerName] = useState<string>("");
   const [wbTool, setWbTool] = useState<"pen" | "eraser">("pen");
   const [wbColor, setWbColor] = useState("#991b1b");
   const [wbSize, setWbSize] = useState(3);
@@ -442,8 +444,13 @@ function LessonRoom() {
         }
       });
 
-      socket.on("whiteboard-toggle", ({ show }: { show: boolean }) => {
+      socket.on("whiteboard-toggle", ({ show, ownerId, ownerName }: { show: boolean; ownerId?: string | null; ownerName?: string }) => {
         setShowWhiteboard(show);
+        setWbOwnerId(ownerId ?? null);
+        setWbOwnerName(ownerName ?? "");
+        if (!show) {
+          setWbTool("pen");
+        }
       });
 
     } catch (err: any) {
@@ -580,7 +587,11 @@ function LessonRoom() {
     };
   };
 
+  const isTeacher = Boolean(booking && user && booking.teacher_id === user.id);
+  const isWbOwner = Boolean(user && (wbOwnerId === user.id || (!wbOwnerId && showWhiteboard)));
+
   const startDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isWbOwner) return;
     drawing.current = true;
     const { x, y } = getCoordinates(e);
     const canvas = canvasRef.current;
@@ -599,6 +610,7 @@ function LessonRoom() {
   };
 
   const startTouchDraw = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isWbOwner) return;
     drawing.current = true;
     const { x, y } = getTouchCoordinates(e);
     const canvas = canvasRef.current;
@@ -617,7 +629,7 @@ function LessonRoom() {
   };
   
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!drawing.current) return;
+    if (!drawing.current || !isWbOwner) return;
     const { x, y } = getCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -635,7 +647,7 @@ function LessonRoom() {
   };
 
   const touchDraw = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!drawing.current) return;
+    if (!drawing.current || !isWbOwner) return;
     const { x, y } = getTouchCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -653,18 +665,40 @@ function LessonRoom() {
   };
   
   const endDraw = () => { drawing.current = false; };
-  
-  const isTeacher = Boolean(booking && user && booking.teacher_id === user.id);
 
   const clearWhiteboard = () => {
-    if (!isTeacher) {
-      toast.error("Only the teacher can clear the whiteboard.");
+    if (!isWbOwner) {
+      toast.error("Only the person who opened the whiteboard can clear it.");
       return;
     }
     const ctx = canvasRef.current?.getContext("2d");
     if (ctx && canvasRef.current) {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       socketRef.current?.emit("draw-clear");
+    }
+  };
+
+  const toggleWhiteboard = () => {
+    if (!showWhiteboard) {
+      const myRole = isTeacher ? "Teacher" : "Student";
+      const myLabel = user?.email?.split("@")[0] ? `${myRole} (${user.email.split("@")[0]})` : myRole;
+      if (wbOwnerId && wbOwnerId !== user?.id) {
+        setShowWhiteboard(true);
+      } else {
+        setWbOwnerId(user?.id ?? null);
+        setWbOwnerName(myLabel);
+        setShowWhiteboard(true);
+        socketRef.current?.emit("whiteboard-toggle", { show: true, ownerId: user?.id, ownerName: myLabel });
+      }
+    } else {
+      if (isWbOwner) {
+        setWbOwnerId(null);
+        setWbOwnerName("");
+        setShowWhiteboard(false);
+        socketRef.current?.emit("whiteboard-toggle", { show: false, ownerId: null, ownerName: "" });
+      } else {
+        setShowWhiteboard(false);
+      }
     }
   };
 
@@ -851,66 +885,77 @@ function LessonRoom() {
                     {/* Left: Title & Mode */}
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-white">Whiteboard</span>
-                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/70">
-                        {isTeacher ? "Teacher Control" : "Student View & Draw"}
+                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition-colors ${
+                        isWbOwner
+                          ? "bg-brand/30 text-amber-300 border border-brand/40"
+                          : "bg-white/10 text-white/70"
+                      }`}>
+                        {isWbOwner ? "Your Board · Full Control" : `View Only · Controlled by ${wbOwnerName || otherName}`}
                       </span>
                     </div>
 
-                    {/* Middle: Drawing Tools (Pen, Eraser, Colors) */}
-                    <div className="flex items-center gap-1 sm:gap-2 bg-zinc-800/90 px-2.5 py-1 rounded-xl border border-white/10">
-                      <button
-                        type="button"
-                        onClick={() => setWbTool("pen")}
-                        title="Pen"
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                          wbTool === "pen"
-                            ? "bg-brand text-white shadow-sm ring-1 ring-white/20"
-                            : "text-white/60 hover:text-white hover:bg-white/5"
-                        }`}
-                      >
-                        <Pencil className="size-3.5" />
-                        <span>Pen</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setWbTool("eraser")}
-                        title="Eraser (Clean strokes)"
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                          wbTool === "eraser"
-                            ? "bg-brand text-white shadow-sm ring-1 ring-white/20"
-                            : "text-white/60 hover:text-white hover:bg-white/5"
-                        }`}
-                      >
-                        <Eraser className="size-3.5" />
-                        <span>Eraser</span>
-                      </button>
+                    {/* Middle: Drawing Tools (Active ONLY for the Whiteboard Owner) */}
+                    {isWbOwner ? (
+                      <div className="flex items-center gap-1 sm:gap-2 bg-zinc-800/90 px-2.5 py-1 rounded-xl border border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => setWbTool("pen")}
+                          title="Pen Tool"
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                            wbTool === "pen"
+                              ? "bg-brand text-white shadow-sm ring-1 ring-white/20"
+                              : "text-white/60 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          <Pencil className="size-3.5" />
+                          <span>Pen</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWbTool("eraser")}
+                          title="Eraser Tool"
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                            wbTool === "eraser"
+                              ? "bg-brand text-white shadow-sm ring-1 ring-white/20"
+                              : "text-white/60 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          <Eraser className="size-3.5" />
+                          <span>Eraser</span>
+                        </button>
 
-                      {wbTool === "pen" && (
-                        <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-white/20">
-                          {[
-                            { color: "#991b1b", label: "Crimson" },
-                            { color: "#18181b", label: "Black" },
-                            { color: "#2563eb", label: "Blue" },
-                            { color: "#16a34a", label: "Green" },
-                          ].map((c) => (
-                            <button
-                              key={c.color}
-                              type="button"
-                              onClick={() => setWbColor(c.color)}
-                              title={c.label}
-                              className={`size-4 sm:size-5 rounded-full transition-all ${
-                                wbColor === c.color ? "scale-125 ring-2 ring-white shadow-sm" : "opacity-60 hover:opacity-100"
-                              }`}
-                              style={{ backgroundColor: c.color }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                        {wbTool === "pen" && (
+                          <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-white/20">
+                            {[
+                              { color: "#991b1b", label: "Crimson" },
+                              { color: "#18181b", label: "Black" },
+                              { color: "#2563eb", label: "Blue" },
+                              { color: "#16a34a", label: "Green" },
+                            ].map((c) => (
+                              <button
+                                key={c.color}
+                                type="button"
+                                onClick={() => setWbColor(c.color)}
+                                title={c.label}
+                                className={`size-4 sm:size-5 rounded-full transition-all ${
+                                  wbColor === c.color ? "scale-125 ring-2 ring-white shadow-sm" : "opacity-60 hover:opacity-100"
+                                }`}
+                                style={{ backgroundColor: c.color }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs text-white/70 bg-white/5 px-3 py-1 rounded-lg border border-white/10">
+                        <Lock className="size-3 text-amber-400 shrink-0" />
+                        <span>Drawing &amp; clearing locked for viewers</span>
+                      </div>
+                    )}
 
-                    {/* Right: Clear Board (Teacher only) & Close */}
+                    {/* Right: Clear Board (Owner only) & Close */}
                     <div className="flex items-center gap-2">
-                      {isTeacher && (
+                      {isWbOwner && (
                         <button
                           type="button"
                           onClick={clearWhiteboard}
@@ -921,10 +966,10 @@ function LessonRoom() {
                       )}
                       <button
                         type="button"
-                        onClick={() => setShowWhiteboard(false)}
+                        onClick={toggleWhiteboard}
                         className="rounded-lg px-2.5 py-1 text-xs font-medium bg-red-600/80 text-white hover:bg-red-600 transition-colors"
                       >
-                        Close
+                        {isWbOwner ? "Close Board" : "Close View"}
                       </button>
                     </div>
                   </div>
@@ -932,7 +977,9 @@ function LessonRoom() {
                     ref={canvasRef}
                     width={1000}
                     height={800}
-                    className="flex-1 bg-white cursor-crosshair w-full object-contain touch-none"
+                    className={`flex-1 bg-white w-full object-contain touch-none ${
+                      isWbOwner ? "cursor-crosshair" : "cursor-default pointer-events-none"
+                    }`}
                     onMouseDown={startDraw}
                     onMouseMove={draw}
                     onMouseUp={endDraw}
@@ -968,12 +1015,8 @@ function LessonRoom() {
                   <Monitor className="size-4" />
                 </button>
                 <button
-                  onClick={() => {
-                     const show = !showWhiteboard;
-                     setShowWhiteboard(show);
-                     socketRef.current?.emit("whiteboard-toggle", { show });
-                  }}
-                  title="Whiteboard"
+                  onClick={toggleWhiteboard}
+                  title={showWhiteboard ? "Close Whiteboard" : "Open Whiteboard"}
                   className={`flex size-9 sm:size-10 items-center justify-center rounded-full transition-colors ${showWhiteboard ? "bg-brand hover:bg-brand/80" : "bg-white/10 hover:bg-white/20"}`}
                 >
                   <Pencil className="size-4" />
