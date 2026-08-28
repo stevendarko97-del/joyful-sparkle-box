@@ -628,7 +628,13 @@ function LessonRoom() {
   
   const endDraw = () => { drawing.current = false; };
   
+  const isTeacher = Boolean(booking && user && booking.teacher_id === user.id);
+
   const clearWhiteboard = () => {
+    if (!isTeacher) {
+      toast.error("Only the teacher can clear the whiteboard.");
+      return;
+    }
     const ctx = canvasRef.current?.getContext("2d");
     if (ctx && canvasRef.current) {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -815,11 +821,28 @@ function LessonRoom() {
               {/* Whiteboard overlay */}
               {showWhiteboard && (
                 <div className="absolute inset-0 z-30 flex flex-col bg-white">
-                  <div className="flex shrink-0 items-center justify-between bg-zinc-900 px-3 sm:px-4 py-2 border-b border-white/10">
-                    <span className="text-xs font-semibold text-white">Whiteboard (Live sync)</span>
-                    <div className="flex gap-2">
-                      <button onClick={clearWhiteboard} className="rounded px-2.5 py-1 text-xs bg-white/10 text-white hover:bg-white/20">Clear</button>
-                      <button onClick={() => setShowWhiteboard(false)} className="rounded px-2.5 py-1 text-xs bg-red-600/80 text-white hover:bg-red-600">Close</button>
+                  <div className="flex shrink-0 items-center justify-between bg-zinc-900 px-3 sm:px-4 py-2.5 border-b border-white/10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">Whiteboard (Live sync)</span>
+                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/70">
+                        {isTeacher ? "Teacher Control" : "Student View & Draw"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isTeacher && (
+                        <button
+                          onClick={clearWhiteboard}
+                          className="rounded-lg px-2.5 py-1 text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors"
+                        >
+                          Clear Board
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowWhiteboard(false)}
+                        className="rounded-lg px-2.5 py-1 text-xs font-medium bg-red-600/80 text-white hover:bg-red-600 transition-colors"
+                      >
+                        Close
+                      </button>
                     </div>
                   </div>
                   <canvas
