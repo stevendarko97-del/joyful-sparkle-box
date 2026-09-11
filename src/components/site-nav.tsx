@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Bell, X, CalendarCheck, GraduationCap, MessageSquare, LogOut, LayoutDashboard, User, CreditCard, AlertCircle, CheckCheck } from "lucide-react";
+import { ChevronDown, Bell, X, CalendarCheck, GraduationCap, MessageSquare, LogOut, LayoutDashboard, User, CreditCard, AlertCircle, CheckCheck, Smartphone, Download } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getBackendUrl } from "@/lib/config";
 import { useState, useEffect, useRef } from "react";
@@ -135,6 +135,15 @@ export function SiteNav() {
               Messages
             </Link>
           )}
+
+          <Link
+            to="/download"
+            className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-brand"
+            activeProps={{ className: "text-brand font-semibold" }}
+          >
+            <Smartphone className="size-4 text-brand" />
+            <span>Get App</span>
+          </Link>
 
           <Link
             to="/support"
@@ -367,6 +376,14 @@ export function SiteNav() {
             </Link>
           )}
           <Link
+            to="/download"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-2 py-2 text-sm font-medium text-brand hover:underline"
+          >
+            <Smartphone className="size-4" />
+            <span>Download Mobile App (APK)</span>
+          </Link>
+          <Link
             to="/support"
             onClick={() => setMobileMenuOpen(false)}
             className="block py-2 text-sm font-medium text-ink hover:text-brand"
@@ -438,6 +455,10 @@ export function SiteFooter() {
           </div>
         </div>
         <div className="flex flex-wrap justify-center gap-6 text-xs font-medium text-muted-foreground">
+          <Link to="/download" className="hover:text-brand transition-colors font-semibold text-brand flex items-center gap-1">
+            <Smartphone className="size-3.5" />
+            <span>Download App</span>
+          </Link>
           <Link to="/how-it-works" className="hover:text-brand transition-colors">How it Works</Link>
           <Link to="/educators" className="hover:text-brand transition-colors">For Educators</Link>
           <Link to="/teachers" search={{ q: undefined }} className="hover:text-brand transition-colors">Find a Tutor</Link>

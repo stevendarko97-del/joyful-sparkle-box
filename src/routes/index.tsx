@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { SiteNav, SiteFooter } from "@/components/site-nav";
+import { MobileAppDownloadSection } from "@/components/mobile-app-download";
+import { Smartphone, Download } from "lucide-react";
 import heroImage from "@/assets/ghanaian-student-hero.png";
 
 export const Route = createFileRoute("/")(({
@@ -33,7 +35,7 @@ function Index() {
             <p className="mt-8 max-w-[56ch] text-pretty text-lg leading-relaxed text-muted-foreground lg:max-w-[48ch]">
               One-on-one live lessons built on the GES curriculum. Book verified Ghanaian tutors for Core and Elective subjects, pay with Mobile Money, and learn from anywhere in the country.
             </p>
-            <div className="mt-10 flex flex-wrap gap-4">
+            <div className="mt-10 flex flex-wrap items-center gap-4">
               <Link to="/teachers" search={{ q: undefined }} className="h-[44px] rounded-full bg-brand px-6 text-base font-medium leading-[44px] text-primary-foreground ring-1 ring-brand transition-transform hover:scale-[1.02]">
                 Find a tutor
               </Link>
@@ -44,6 +46,13 @@ function Index() {
               >
                 Teach on Quick Tutor
               </Link>
+              <a
+                href="#download-app"
+                className="inline-flex h-[44px] items-center gap-2 rounded-full border border-brand/30 bg-brand-soft px-5 text-sm font-semibold text-brand transition-all hover:bg-brand/15 hover:scale-[1.02]"
+              >
+                <Smartphone className="size-4" />
+                <span>Get Mobile App</span>
+              </a>
             </div>
             <dl className="mt-10 flex flex-wrap gap-x-10 gap-y-4 border-t border-border pt-6">
               {[
@@ -189,6 +198,11 @@ function Index() {
           </div>
         </div>
       </section>
+
+      {/* Mobile App Download Showcase */}
+      <div id="download-app">
+        <MobileAppDownloadSection />
+      </div>
 
       {/* CTA */}
       <section className="bg-ink py-20">

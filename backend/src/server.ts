@@ -33,6 +33,7 @@ import paymentsRouter from './routes/payments';
 import messagesRouter from './routes/messages';
 import supportRouter from './routes/support';
 import adminRouter from './routes/admin';
+import appRouter from './routes/app';
 
 import {
   sendLessonPriorReminderSms,
@@ -399,6 +400,7 @@ app.use('/api', paymentsRouter);       // /api/ratings
 app.use('/api/messages', messagesRouter);
 app.use('/api/support', supportRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/app', appRouter);
 
 
 // ── Automated 30-min & 5-min lesson reminder worker ──────────────────────────

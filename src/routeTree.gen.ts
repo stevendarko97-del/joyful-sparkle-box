@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as DownloadRouteImport } from './routes/download'
 import { Route as EducatorsRouteImport } from './routes/educators'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -40,6 +41,11 @@ const AdminRoute = AdminRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadRoute = DownloadRouteImport.update({
+  id: '/download',
+  path: '/download',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EducatorsRoute = EducatorsRouteImport.update({
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/download': typeof DownloadRoute
   '/educators': typeof EducatorsRoute
   '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/download': typeof DownloadRoute
   '/educators': typeof EducatorsRoute
   '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/download': typeof DownloadRoute
   '/educators': typeof EducatorsRoute
   '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/download'
     | '/educators'
     | '/feedback'
     | '/forgot-password'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/download'
     | '/educators'
     | '/feedback'
     | '/forgot-password'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/download'
     | '/educators'
     | '/feedback'
     | '/forgot-password'
@@ -235,6 +247,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
+  DownloadRoute: typeof DownloadRoute
   EducatorsRoute: typeof EducatorsRoute
   FeedbackRoute: typeof FeedbackRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -272,6 +285,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/download': {
+      id: '/download'
+      path: '/download'
+      fullPath: '/download'
+      preLoaderRoute: typeof DownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/educators': {
@@ -379,6 +399,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
+  DownloadRoute: DownloadRoute,
   EducatorsRoute: EducatorsRoute,
   FeedbackRoute: FeedbackRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,

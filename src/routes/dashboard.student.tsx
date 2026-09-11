@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Calendar, Clock, CreditCard, CheckCircle2, MessageSquare, AlertCircle } from "lucide-react";
+import { Calendar, Clock, CreditCard, CheckCircle2, MessageSquare, AlertCircle, Smartphone, Download } from "lucide-react";
 import { ReportDialog } from "@/components/report-dialog";
 export const Route = createFileRoute("/dashboard/student")({ component: StudentDashboard });
 
@@ -306,6 +306,26 @@ function StudentDashboard() {
             </div>
           </div>
         )}
+
+        {/* Mobile App Callout */}
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-brand/5 border border-brand/20 p-5">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-xl bg-brand text-white flex items-center justify-center shrink-0">
+              <Smartphone className="size-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-ink">Learn on the go with the Quick Tutor Mobile App</p>
+              <p className="text-xs text-muted-foreground">Join video classrooms, receive instant MoMo alerts &amp; SMS reminders on Android &amp; iOS.</p>
+            </div>
+          </div>
+          <Link
+            to="/download"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand/90 transition-all hover:scale-105"
+          >
+            <Download className="size-3.5" />
+            <span>Download Mobile App</span>
+          </Link>
+        </div>
 
         {/* Bookings */}
         <div className="rounded-2xl bg-card p-5 ring-1 ring-black/5">

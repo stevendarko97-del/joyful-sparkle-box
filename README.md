@@ -74,11 +74,20 @@ npm run dev
 # Frontend running at http://localhost:8080 (or http://localhost:5173)
 ```
 
+**Terminal 3 (Flutter Mobile App):**
+```bash
+cd mobile
+flutter pub get
+flutter run
+# Direct APK compilation: flutter build apk --release
+```
+
 ---
 
 ## 🏗️ Tech Stack
 
-- **Frontend**: React 18, Vite, TanStack Router & Query, TailwindCSS, Lucide Icons, Sonner.
+- **Mobile Client**: Flutter 3 (Dart), Provider, WebRTC, Socket.IO Client, Google Fonts, Secure Storage.
+- **Web Frontend**: React 18, Vite, TanStack Router & Query, TailwindCSS, Lucide Icons, Sonner.
 - **Backend**: Node.js, Express, TypeScript, Socket.IO, PostgreSQL (`pg`), JWT, Bcrypt.
 - **Real-Time Video**: WebRTC (STUN/ICE), Canvas Whiteboard.
 - **Payments**: Paystack Inline Popup & Webhooks (MTN MoMo, Telecel Cash, AT Money, Debit Cards).
